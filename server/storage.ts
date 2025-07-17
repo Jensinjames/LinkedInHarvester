@@ -110,6 +110,7 @@ export class MemStorage implements IStorage {
       successfulProfiles: 0,
       failedProfiles: 0,
       retryingProfiles: 0,
+      batchSize: insertJob.batchSize || 50,
       errorBreakdown: null,
       resultPath: null,
       startedAt: null,
@@ -129,7 +130,7 @@ export class MemStorage implements IStorage {
   async getJobsByUser(userId: number): Promise<Job[]> {
     return Array.from(this.jobs.values())
       .filter(job => job.userId === userId)
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
   }
 
   async updateJobStatus(id: number, status: string, data?: Partial<Job>): Promise<void> {
@@ -218,8 +219,8 @@ export class MemStorage implements IStorage {
     const userJobs = await this.getJobsByUser(userId);
     
     const totalProfiles = userJobs.reduce((sum, job) => sum + job.totalProfiles, 0);
-    const successfulProfiles = userJobs.reduce((sum, job) => sum + job.successfulProfiles, 0);
-    const failedProfiles = userJobs.reduce((sum, job) => sum + job.failedProfiles, 0);
+    const successfulProfiles = userJobs.reduce((sum, job) => sum + (job.successfulProfiles || 0), 0);
+    const failedProfiles = userJobs.reduce((sum, job) => sum + (job.failedProfiles || 0), 0);
     
     const successRate = totalProfiles > 0 
       ? ((successfulProfiles / totalProfiles) * 100).toFixed(1) + '%'

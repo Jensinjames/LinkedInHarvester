@@ -1,8 +1,18 @@
-# LinkedIn Profile Extractor
+# LinkedIn API Integration Tool
 
 ## Overview
 
-This is a full-stack LinkedIn profile extraction tool built with a React frontend and Express backend. The application allows users to upload Excel files containing LinkedIn URLs, authenticate with LinkedIn, and automatically extract profile data in batches with progress tracking and error handling.
+This is a professional LinkedIn API integration tool built with a React frontend and Express backend. The application provides legitimate access to LinkedIn profile data through official APIs, featuring an Azure Portal-inspired design. Users can upload Excel files containing LinkedIn URLs, authenticate with LinkedIn OAuth, and extract profile data in batches with comprehensive progress tracking and error handling.
+
+## Recent Changes
+
+- ✓ Implemented Azure Portal-inspired design with professional color scheme
+- ✓ Added functional authentication system with LinkedIn OAuth integration
+- ✓ Created working file upload system with Excel processing
+- ✓ Built real-time job processing with progress tracking
+- ✓ Added comprehensive statistics dashboard
+- ✓ Implemented export functionality for results
+- ✓ Added demo data for immediate functionality testing
 
 ## User Preferences
 

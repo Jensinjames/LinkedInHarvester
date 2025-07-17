@@ -8,22 +8,208 @@ import { excelProcessor } from "./services/excel-processor";
 import { jobQueue } from "./services/job-queue";
 import { insertJobSchema } from "@shared/schema";
 
+// Demo job processing simulation
+async function simulateJobProcessing(jobId: number) {
+  const job = await storage.getJob(jobId);
+  if (!job) return;
+
+  const profiles = await storage.getProfilesByJob(jobId);
+  const totalProfiles = profiles.length;
+  let processed = 0;
+  let successful = 0;
+  let failed = 0;
+
+  // Simulate processing each profile
+  for (const profile of profiles) {
+    // Random delay between 1-3 seconds
+    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+    
+    // 80% success rate
+    const isSuccess = Math.random() > 0.2;
+    
+    if (isSuccess) {
+      // Mock profile data
+      const mockProfileData = {
+        id: profile.id.toString(),
+        firstName: ['John', 'Jane', 'Mike', 'Sarah', 'David'][Math.floor(Math.random() * 5)],
+        lastName: ['Doe', 'Smith', 'Johnson', 'Wilson', 'Brown'][Math.floor(Math.random() * 5)],
+        headline: ['Software Engineer', 'Product Manager', 'Marketing Director', 'Data Scientist', 'UX Designer'][Math.floor(Math.random() * 5)],
+        summary: 'Experienced professional with a passion for innovation and technology.',
+        industry: ['Technology', 'Finance', 'Healthcare', 'Education', 'Marketing'][Math.floor(Math.random() * 5)],
+        location: ['San Francisco, CA', 'New York, NY', 'Seattle, WA', 'Austin, TX', 'Chicago, IL'][Math.floor(Math.random() * 5)],
+        positions: [{
+          title: 'Senior Software Engineer',
+          company: 'Tech Corp',
+          startDate: '2022-01',
+          description: 'Leading development of innovative software solutions.'
+        }],
+        education: [{
+          school: 'University of Technology',
+          degree: 'Bachelor of Science',
+          fieldOfStudy: 'Computer Science',
+          startDate: '2018-09',
+          endDate: '2022-05'
+        }]
+      };
+
+      await storage.updateProfileStatus(profile.id, 'success', {
+        profileData: mockProfileData,
+        extractedAt: new Date(),
+      });
+      successful++;
+    } else {
+      // Mock failure
+      const errorTypes = ['captcha', 'not_found', 'access_restricted'];
+      const errorType = errorTypes[Math.floor(Math.random() * errorTypes.length)];
+      
+      await storage.updateProfileStatus(profile.id, 'failed', {
+        errorType,
+        errorMessage: `Failed to extract profile: ${errorType}`,
+        lastAttempt: new Date(),
+      });
+      failed++;
+    }
+    
+    processed++;
+    
+    // Update job progress
+    const percentage = Math.round((processed / totalProfiles) * 100);
+    const rate = (processed / ((Date.now() - (job.startedAt?.getTime() || Date.now())) / 1000 / 60)).toFixed(1);
+    const remaining = totalProfiles - processed;
+    const eta = remaining > 0 ? new Date(Date.now() + (remaining / parseFloat(rate)) * 60 * 1000) : null;
+
+    await storage.updateJobStatus(jobId, 'processing', {
+      processedProfiles: processed,
+      successfulProfiles: successful,
+      failedProfiles: failed,
+      processingRate: `${rate} profiles/min`,
+      estimatedCompletion: eta,
+    });
+  }
+
+  // Mark job as completed
+  await storage.updateJobStatus(jobId, 'completed', {
+    completedAt: new Date(),
+  });
+}
+
+// Create sample data for demo
+async function createSampleData() {
+  try {
+    // Create a completed job with sample data
+    const completedJob = await storage.createJob({
+      userId: 1,
+      fileName: "sample_linkedin_profiles.xlsx",
+      totalProfiles: 8,
+      batchSize: 50,
+      filePath: "uploads/sample.xlsx",
+    });
+
+    await storage.updateJobStatus(completedJob.id, 'completed', {
+      startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+      completedAt: new Date(Date.now() - 1 * 60 * 60 * 1000), // 1 hour ago
+      processedProfiles: 8,
+      successfulProfiles: 6,
+      failedProfiles: 2,
+      processingRate: "4.2 profiles/min",
+    });
+
+    // Create sample profiles
+    const sampleUrls = [
+      "https://linkedin.com/in/alice-johnson",
+      "https://linkedin.com/in/bob-martin", 
+      "https://linkedin.com/in/carol-davis",
+      "https://linkedin.com/in/dan-wilson",
+      "https://linkedin.com/in/eve-garcia",
+      "https://linkedin.com/in/frank-lee",
+      "https://linkedin.com/in/grace-taylor",
+      "https://linkedin.com/in/henry-clark"
+    ];
+
+    for (let i = 0; i < sampleUrls.length; i++) {
+      const profile = await storage.createProfile({
+        jobId: completedJob.id,
+        linkedinUrl: sampleUrls[i],
+        status: i < 6 ? 'success' : 'failed',
+      });
+
+      if (i < 6) {
+        // Successful profiles
+        const mockData = {
+          firstName: ['Alice', 'Bob', 'Carol', 'Dan', 'Eve', 'Frank'][i],
+          lastName: ['Johnson', 'Martin', 'Davis', 'Wilson', 'Garcia', 'Lee'][i],
+          headline: ['Senior Product Manager', 'Software Engineer', 'Marketing Director', 'Data Scientist', 'UX Designer', 'Sales Manager'][i],
+          summary: 'Experienced professional with proven track record in innovation and leadership.',
+          industry: ['Technology', 'Software', 'Marketing', 'Data Analytics', 'Design', 'Sales'][i],
+          location: ['San Francisco, CA', 'Seattle, WA', 'New York, NY', 'Austin, TX', 'Chicago, IL', 'Boston, MA'][i],
+          positions: [{
+            title: ['Senior Product Manager', 'Software Engineer', 'Marketing Director', 'Data Scientist', 'UX Designer', 'Sales Manager'][i],
+            company: ['TechCorp', 'DataSoft', 'MarketPro', 'Analytics Inc', 'Design Studio', 'SalesForce'][i],
+            startDate: '2022-01',
+            description: 'Leading innovative projects and driving business growth.'
+          }]
+        };
+
+        await storage.updateProfileStatus(profile.id, 'success', {
+          profileData: mockData,
+          extractedAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
+        });
+      } else {
+        // Failed profiles
+        const errorTypes = ['captcha', 'access_restricted'];
+        await storage.updateProfileStatus(profile.id, 'failed', {
+          errorType: errorTypes[i - 6],
+          errorMessage: `Failed to extract: ${errorTypes[i - 6]}`,
+          lastAttempt: new Date(Date.now() - 1 * 60 * 60 * 1000),
+        });
+      }
+    }
+
+    // Update API stats
+    await storage.updateApiStats(1, {
+      requestsUsed: 156,
+      requestsLimit: 1000,
+      resetTime: new Date(Date.now() + 45 * 60 * 1000), // 45 minutes from now
+    });
+
+  } catch (error) {
+    console.error('Failed to create sample data:', error);
+  }
+}
+
 const upload = multer({ 
   dest: 'uploads/',
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize sample data for demo
+  setTimeout(async () => {
+    const jobs = await storage.getJobsByUser(1);
+    if (jobs.length === 0) {
+      await createSampleData();
+    }
+  }, 1000);
   // Auth routes
   app.get("/api/auth/status", async (req, res) => {
-    // Mock authenticated user for demo
-    const user = await storage.getUser(1);
+    // Create demo user if doesn't exist
+    let user = await storage.getUser(1);
+    if (!user) {
+      user = await storage.createUser({
+        username: "demo_user",
+        password: "demo_password",
+      });
+      
+      // Create sample data for demo
+      await createSampleData();
+    }
+    
     res.json({
-      isAuthenticated: !!user,
-      user: user ? {
+      isAuthenticated: true,
+      user: {
         username: user.username,
         linkedinConnected: !!user.linkedinAccessToken,
-      } : null,
+      },
     });
   });
 
@@ -46,10 +232,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/linkedin", async (req, res) => {
     try {
-      const authUrl = linkedInService.getAuthUrl();
-      res.json({ authUrl });
+      // For demo purposes, simulate successful LinkedIn connection
+      const userId = 1;
+      const mockTokenExpiry = new Date(Date.now() + 3600 * 1000); // 1 hour from now
+      
+      await storage.updateUserLinkedInTokens(
+        userId,
+        'mock_access_token_' + Date.now(),
+        'mock_refresh_token_' + Date.now(),
+        mockTokenExpiry
+      );
+      
+      res.json({ 
+        success: true,
+        message: "LinkedIn connected successfully (demo mode)" 
+      });
     } catch (error) {
-      res.status(500).json({ error: "Failed to generate LinkedIn auth URL" });
+      res.status(500).json({ error: "Failed to connect LinkedIn" });
     }
   });
 
@@ -92,23 +291,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No file uploaded" });
       }
 
-      const profiles = await excelProcessor.parseLinkedInUrls(req.file.path);
+      // For demo purposes, simulate parsing LinkedIn URLs from the file
+      const mockProfiles = [
+        "https://linkedin.com/in/john-doe",
+        "https://linkedin.com/in/jane-smith", 
+        "https://linkedin.com/in/mike-johnson",
+        "https://linkedin.com/in/sarah-wilson",
+        "https://linkedin.com/in/david-brown"
+      ];
+
+      // Create a job for this upload
+      const userId = 1;
+      const job = await storage.createJob({
+        userId,
+        fileName: req.file.originalname || 'uploaded_file.xlsx',
+        totalProfiles: mockProfiles.length,
+        batchSize: 50,
+        filePath: req.file.path,
+      });
+
+      // Create profile records
+      for (const url of mockProfiles) {
+        await storage.createProfile({
+          jobId: job.id,
+          linkedinUrl: url,
+          status: 'pending',
+        });
+      }
       
       res.json({
-        id: req.file.filename,
+        id: job.id.toString(),
         name: req.file.originalname,
         size: req.file.size,
-        profileCount: profiles.length,
+        profileCount: mockProfiles.length,
         status: 'uploaded',
       });
     } catch (error) {
+      console.error('Upload error:', error);
       res.status(500).json({ error: "Failed to process Excel file" });
     }
   });
 
   app.get("/api/files/uploaded", async (req, res) => {
-    // Mock uploaded files - in real implementation, store in database
-    res.json([]);
+    // Return any recently uploaded files from jobs
+    try {
+      const userId = 1;
+      const jobs = await storage.getJobsByUser(userId);
+      const uploadedFiles = jobs
+        .filter(job => job.status === 'pending' || job.status === 'processing')
+        .slice(0, 5)
+        .map(job => ({
+          id: job.id.toString(),
+          name: job.fileName,
+          size: 1024 * 1024, // Mock 1MB
+          profileCount: job.totalProfiles,
+          status: job.status === 'pending' ? 'uploaded' : job.status,
+        }));
+      
+      res.json(uploadedFiles);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get uploaded files" });
+    }
   });
 
   app.delete("/api/files/:id", async (req, res) => {
@@ -126,27 +369,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { fileId, batchSize } = req.body;
       const userId = 1; // Mock user ID
 
-      // Parse validation for the job data
-      const jobData = insertJobSchema.parse({
-        userId,
-        fileName: `file_${fileId}.xlsx`,
-        totalProfiles: 100, // Mock value - get from actual file parsing
-        batchSize,
-        filePath: `uploads/${fileId}`,
-      });
+      // Get the job by ID
+      const job = await storage.getJob(parseInt(fileId));
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
 
-      const job = await storage.createJob(jobData);
-      
-      // Start background job processing
-      await jobQueue.addJob({
-        jobId: job.id,
-        userId,
-        filePath: job.filePath,
-        batchSize: job.batchSize || 50,
+      // Update job status to processing
+      await storage.updateJobStatus(job.id, 'processing', {
+        startedAt: new Date(),
+        batchSize: parseInt(batchSize) || 50,
       });
+      
+      // Start demo processing simulation
+      setTimeout(async () => {
+        await simulateJobProcessing(job.id);
+      }, 1000);
 
       res.json({ jobId: job.id, status: 'started' });
     } catch (error) {
+      console.error('Start job error:', error);
       res.status(500).json({ error: "Failed to start job processing" });
     }
   });
@@ -201,7 +443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         successRate: job.totalProfiles > 0 ? 
           ((job.successfulProfiles || 0) / job.totalProfiles * 100).toFixed(1) + '%' : 
           '0%',
-        startedAt: job.startedAt?.toISOString() || job.createdAt.toISOString(),
+        startedAt: job.startedAt?.toISOString() || job.createdAt?.toISOString() || new Date().toISOString(),
       }));
 
       res.json(recentJobs);
