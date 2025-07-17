@@ -1,9 +1,10 @@
 import { 
-  users, jobs, profiles, apiStats,
+  users, jobs, profiles, apiStats, aiAnalyses,
   type User, type InsertUser,
   type Job, type InsertJob,
   type Profile, type InsertProfile,
-  type ApiStats, type InsertApiStats
+  type ApiStats, type InsertApiStats,
+  type AiAnalysis, type InsertAiAnalysis
 } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
@@ -45,6 +46,11 @@ export interface IStorage {
     profileNotFound: number;
     accessRestricted: number;
   }>;
+
+  // AI Analysis operations
+  createAiAnalysis(analysis: InsertAiAnalysis): Promise<AiAnalysis>;
+  getAiAnalysisByJob(jobId: number): Promise<AiAnalysis[]>;
+  getAiAnalysisByProfile(profileId: number): Promise<AiAnalysis | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -253,6 +259,27 @@ export class MemStorage implements IStorage {
       accessRestricted: allProfiles.filter(p => p.errorType === 'access_restricted').length,
     };
   }
+
+  async createAiAnalysis(insertAnalysis: InsertAiAnalysis): Promise<AiAnalysis> {
+    const id = Math.floor(Math.random() * 100000); // Simple ID for in-memory storage
+    const analysis: AiAnalysis = {
+      ...insertAnalysis,
+      id,
+      profileId: insertAnalysis.profileId || null,
+      createdAt: new Date(),
+    };
+    return analysis;
+  }
+
+  async getAiAnalysisByJob(jobId: number): Promise<AiAnalysis[]> {
+    // For in-memory storage, return empty array since we don't persist AI analyses
+    return [];
+  }
+
+  async getAiAnalysisByProfile(profileId: number): Promise<AiAnalysis | undefined> {
+    // For in-memory storage, return undefined since we don't persist AI analyses
+    return undefined;
+  }
 }
 
 // Database Storage Implementation
@@ -456,6 +483,29 @@ export class DatabaseStorage implements IStorage {
       profileNotFound,
       accessRestricted,
     };
+  }
+
+  async createAiAnalysis(insertAnalysis: InsertAiAnalysis): Promise<AiAnalysis> {
+    const [analysis] = await db
+      .insert(aiAnalyses)
+      .values(insertAnalysis)
+      .returning();
+    return analysis;
+  }
+
+  async getAiAnalysisByJob(jobId: number): Promise<AiAnalysis[]> {
+    return await db
+      .select()
+      .from(aiAnalyses)
+      .where(eq(aiAnalyses.jobId, jobId));
+  }
+
+  async getAiAnalysisByProfile(profileId: number): Promise<AiAnalysis | undefined> {
+    const [analysis] = await db
+      .select()
+      .from(aiAnalyses)
+      .where(eq(aiAnalyses.profileId, profileId));
+    return analysis || undefined;
   }
 }
 

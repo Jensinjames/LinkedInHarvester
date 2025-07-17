@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { toast } from "@/hooks/use-toast";
-import { Linkedin } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { Linkedin, Home, Bot } from "lucide-react";
 
 interface AuthStatus {
   isAuthenticated: boolean;
@@ -14,6 +15,7 @@ interface AuthStatus {
 }
 
 export default function NavigationHeader() {
+  const [location] = useLocation();
   const { data: authStatus, isLoading } = useQuery<AuthStatus>({
     queryKey: ["/api/auth/status"],
   });
@@ -47,11 +49,37 @@ export default function NavigationHeader() {
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <div className="flex items-center">
-            <Linkedin className="text-azure-blue text-2xl mr-3" />
-            <h1 className="text-xl font-semibold text-text-dark">
-              LinkedIn Data Extraction Tool
-            </h1>
+          <div className="flex items-center space-x-8">
+            <div className="flex items-center">
+              <Linkedin className="text-azure-blue text-2xl mr-3" />
+              <h1 className="text-xl font-semibold text-text-dark">
+                LinkedIn Data Extraction Tool
+              </h1>
+            </div>
+            
+            {/* Navigation Links */}
+            <nav className="flex space-x-1">
+              <Link href="/">
+                <Button
+                  variant={location === "/" ? "default" : "ghost"}
+                  size="sm"
+                  className="flex items-center space-x-2"
+                >
+                  <Home className="h-4 w-4" />
+                  <span>Dashboard</span>
+                </Button>
+              </Link>
+              <Link href="/ai-assistant">
+                <Button
+                  variant={location === "/ai-assistant" ? "default" : "ghost"}
+                  size="sm"
+                  className="flex items-center space-x-2"
+                >
+                  <Bot className="h-4 w-4" />
+                  <span>AI Assistant</span>
+                </Button>
+              </Link>
+            </nav>
           </div>
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">

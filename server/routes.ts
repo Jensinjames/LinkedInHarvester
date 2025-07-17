@@ -6,6 +6,7 @@ import { storage } from "./storage";
 import { linkedInService } from "./services/linkedin-api";
 import { excelProcessor } from "./services/excel-processor";
 import { jobQueue } from "./services/job-queue";
+import { aiAssistant } from "./services/ai-assistant";
 import { insertJobSchema } from "@shared/schema";
 
 // Demo job processing simulation
@@ -539,6 +540,224 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // AI Assistant routes
+  app.post("/api/ai/analyze-profile/:profileId", async (req, res) => {
+    try {
+      const profileId = parseInt(req.params.profileId);
+      const user = await getDemoUser();
+      
+      const profiles = await storage.getProfilesByJob(profileId);
+      const profile = profiles.find(p => p.id === profileId);
+      
+      if (!profile || !profile.profileData) {
+        return res.status(404).json({ error: "Profile not found or no data available" });
+      }
+
+      // Convert profile data for AI analysis
+      const profileData = profile.profileData as any;
+      const profileForAnalysis = {
+        id: profile.id,
+        name: `${profileData?.firstName || ''} ${profileData?.lastName || ''}`.trim(),
+        headline: profileData?.headline || '',
+        summary: profileData?.summary || '',
+        location: profileData?.location || '',
+        experience: profileData?.positions?.map((p: any) => `${p.title} at ${p.company}: ${p.description || ''}`).join('\n') || '',
+        education: profileData?.education?.map((e: any) => `${e.degree} in ${e.fieldOfStudy} from ${e.school}`).join('\n') || '',
+        skills: '',
+        connections: '',
+        linkedinUrl: profile.linkedinUrl,
+        status: profile.status,
+        profileData: profile.profileData,
+        jobId: profile.jobId,
+        errorType: profile.errorType,
+        errorMessage: profile.errorMessage,
+        retryCount: profile.retryCount,
+        lastAttempt: profile.lastAttempt,
+        extractedAt: profile.extractedAt,
+      };
+
+      const analysis = await aiAssistant.analyzeProfile(profileForAnalysis);
+      
+      // Store the analysis in the database
+      await storage.createAiAnalysis({
+        jobId: profile.jobId,
+        profileId: profile.id,
+        analysisType: 'profile',
+        analysisData: analysis,
+      });
+      
+      res.json(analysis);
+    } catch (error) {
+      console.error('Error analyzing profile:', error);
+      res.status(500).json({ error: "Failed to analyze profile" });
+    }
+  });
+
+  app.post("/api/ai/analyze-job/:jobId", async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const user = await getDemoUser();
+      
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const profiles = await storage.getProfilesByJob(jobId);
+      const successfulProfiles = profiles.filter(p => p.status === 'success' && p.profileData);
+
+      if (successfulProfiles.length === 0) {
+        return res.status(400).json({ error: "No successful profiles found for analysis" });
+      }
+
+      // Convert profiles for AI analysis
+      const profilesForAnalysis = successfulProfiles.map(profile => {
+        const profileData = profile.profileData as any;
+        return {
+          id: profile.id,
+          name: `${profileData?.firstName || ''} ${profileData?.lastName || ''}`.trim(),
+          headline: profileData?.headline || '',
+          summary: profileData?.summary || '',
+          location: profileData?.location || '',
+          experience: profileData?.positions?.map((p: any) => `${p.title} at ${p.company}: ${p.description || ''}`).join('\n') || '',
+          education: profileData?.education?.map((e: any) => `${e.degree} in ${e.fieldOfStudy} from ${e.school}`).join('\n') || '',
+          skills: '',
+          connections: '',
+          linkedinUrl: profile.linkedinUrl,
+          status: profile.status,
+          profileData: profile.profileData,
+          jobId: profile.jobId,
+          errorType: profile.errorType,
+          errorMessage: profile.errorMessage,
+          retryCount: profile.retryCount,
+          lastAttempt: profile.lastAttempt,
+          extractedAt: profile.extractedAt,
+        };
+      });
+
+      const analysis = await aiAssistant.analyzeBulkProfiles(profilesForAnalysis);
+      
+      // Store the analysis in the database
+      await storage.createAiAnalysis({
+        jobId: jobId,
+        profileId: null,
+        analysisType: 'bulk',
+        analysisData: analysis,
+      });
+      
+      res.json(analysis);
+    } catch (error) {
+      console.error('Error analyzing job:', error);
+      res.status(500).json({ error: "Failed to analyze job profiles" });
+    }
+  });
+
+  app.post("/api/ai/recruiting-insights/:jobId", async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const { jobTitle } = req.body;
+      const user = await getDemoUser();
+      
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      const profiles = await storage.getProfilesByJob(jobId);
+      const successfulProfiles = profiles.filter(p => p.status === 'success' && p.profileData);
+
+      if (successfulProfiles.length === 0) {
+        return res.status(400).json({ error: "No successful profiles found for analysis" });
+      }
+
+      // Convert profiles for AI analysis
+      const profilesForAnalysis = successfulProfiles.map(profile => {
+        const profileData = profile.profileData as any;
+        return {
+          id: profile.id,
+          name: `${profileData?.firstName || ''} ${profileData?.lastName || ''}`.trim(),
+          headline: profileData?.headline || '',
+          summary: profileData?.summary || '',
+          location: profileData?.location || '',
+          experience: profileData?.positions?.map((p: any) => `${p.title} at ${p.company}: ${p.description || ''}`).join('\n') || '',
+          education: profileData?.education?.map((e: any) => `${e.degree} in ${e.fieldOfStudy} from ${e.school}`).join('\n') || '',
+          skills: '',
+          connections: '',
+          linkedinUrl: profile.linkedinUrl,
+          status: profile.status,
+          profileData: profile.profileData,
+          jobId: profile.jobId,
+          errorType: profile.errorType,
+          errorMessage: profile.errorMessage,
+          retryCount: profile.retryCount,
+          lastAttempt: profile.lastAttempt,
+          extractedAt: profile.extractedAt,
+        };
+      });
+
+      const insights = await aiAssistant.generateRecruitingInsights(profilesForAnalysis, jobTitle);
+      
+      // Store the analysis in the database
+      await storage.createAiAnalysis({
+        jobId: jobId,
+        profileId: null,
+        analysisType: 'recruiting',
+        analysisData: { insights, jobTitle },
+      });
+      
+      res.json({ insights });
+    } catch (error) {
+      console.error('Error generating recruiting insights:', error);
+      res.status(500).json({ error: "Failed to generate recruiting insights" });
+    }
+  });
+
+  app.post("/api/ai/chat", async (req, res) => {
+    try {
+      const { message, jobId } = req.body;
+      const user = await getDemoUser();
+      
+      let context: any = {};
+      
+      if (jobId) {
+        const job = await storage.getJob(jobId);
+        const profiles = await storage.getProfilesByJob(jobId);
+        const successfulProfiles = profiles.filter(p => p.status === 'success' && p.profileData);
+        
+        context = {
+          jobId,
+          profiles: successfulProfiles.map(profile => {
+            const profileData = profile.profileData as any;
+            return {
+              id: profile.id,
+              name: `${profileData?.firstName || ''} ${profileData?.lastName || ''}`.trim(),
+              headline: profileData?.headline || '',
+              location: profileData?.location || '',
+              linkedinUrl: profile.linkedinUrl,
+            };
+          })
+        };
+      }
+      
+      const response = await aiAssistant.chatWithAssistant(message, context);
+      res.json({ response });
+    } catch (error) {
+      console.error('Error in AI chat:', error);
+      res.status(500).json({ error: "Failed to process chat message" });
+    }
+  });
+
+  app.get("/api/ai/analyses/:jobId", async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.jobId);
+      const analyses = await storage.getAiAnalysisByJob(jobId);
+      res.json(analyses);
+    } catch (error) {
+      console.error('Error getting AI analyses:', error);
+      res.status(500).json({ error: "Failed to get AI analyses" });
+    }
+  });
+
   // Export routes
   app.post("/api/export/:type", async (req, res) => {
     try {
@@ -552,6 +771,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.send(excelBuffer);
     } catch (error) {
       res.status(500).json({ error: "Failed to export data" });
+    }
+  });
+
+  // Job profiles route for AI Assistant
+  app.get("/api/jobs/:id/profiles", async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      const profiles = await storage.getProfilesByJob(jobId);
+      res.json(profiles);
+    } catch (error) {
+      console.error('Error getting job profiles:', error);
+      res.status(500).json({ error: "Failed to get job profiles" });
     }
   });
 

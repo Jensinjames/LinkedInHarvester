@@ -55,6 +55,15 @@ export const apiStats = pgTable("api_stats", {
   lastUpdated: timestamp("last_updated").defaultNow(),
 });
 
+export const aiAnalyses = pgTable("ai_analyses", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").notNull(),
+  profileId: integer("profile_id"), // null for bulk analysis
+  analysisType: text("analysis_type").notNull(), // 'profile', 'bulk', 'recruiting'
+  analysisData: jsonb("analysis_data").notNull(), // AI analysis results
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -72,6 +81,13 @@ export const insertProfileSchema = createInsertSchema(profiles).pick({
   jobId: true,
   linkedinUrl: true,
   status: true,
+});
+
+export const insertAiAnalysisSchema = createInsertSchema(aiAnalyses).pick({
+  jobId: true,
+  profileId: true,
+  analysisType: true,
+  analysisData: true,
 });
 
 export const insertApiStatsSchema = createInsertSchema(apiStats).pick({
@@ -92,3 +108,6 @@ export type InsertProfile = z.infer<typeof insertProfileSchema>;
 
 export type ApiStats = typeof apiStats.$inferSelect;
 export type InsertApiStats = z.infer<typeof insertApiStatsSchema>;
+
+export type AiAnalysis = typeof aiAnalyses.$inferSelect;
+export type InsertAiAnalysis = z.infer<typeof insertAiAnalysisSchema>;
