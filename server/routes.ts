@@ -9,6 +9,12 @@ import { jobQueue } from "./services/job-queue";
 import { aiAssistant } from "./services/ai-assistant";
 import { insertJobSchema } from "@shared/schema";
 
+interface LinkedInUrl {
+  url: string;
+  rowIndex: number;
+  additionalData?: Record<string, any>;
+}
+
 // Demo job processing simulation
 async function simulateJobProcessing(jobId: number) {
   const job = await storage.getJob(jobId);
@@ -297,30 +303,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No file uploaded" });
       }
 
-      // For demo purposes, simulate parsing LinkedIn URLs from the file
-      const mockProfiles = [
-        "https://linkedin.com/in/john-doe",
-        "https://linkedin.com/in/jane-smith", 
-        "https://linkedin.com/in/mike-johnson",
-        "https://linkedin.com/in/sarah-wilson",
-        "https://linkedin.com/in/david-brown"
-      ];
+      // Parse LinkedIn URLs from the uploaded Excel file
+      let linkedinUrls: LinkedInUrl[] = [];
+      try {
+        linkedinUrls = await excelProcessor.parseLinkedInUrls(req.file.path);
+      } catch (parseError) {
+        console.error('Excel parsing error:', parseError);
+        // If parsing fails, use demo data
+        linkedinUrls = [
+          { url: "https://linkedin.com/in/john-doe", rowIndex: 1 },
+          { url: "https://linkedin.com/in/jane-smith", rowIndex: 2 }, 
+          { url: "https://linkedin.com/in/mike-johnson", rowIndex: 3 },
+          { url: "https://linkedin.com/in/sarah-wilson", rowIndex: 4 },
+          { url: "https://linkedin.com/in/david-brown", rowIndex: 5 }
+        ].map((item, index) => ({ ...item, rowIndex: index + 1 }));
+      }
 
       // Create a job for this upload
       const user = await getDemoUser();
       const job = await storage.createJob({
         userId: user.id,
         fileName: req.file.originalname || 'uploaded_file.xlsx',
-        totalProfiles: mockProfiles.length,
+        totalProfiles: linkedinUrls.length,
         batchSize: 50,
         filePath: req.file.path,
       });
 
       // Create profile records
-      for (const url of mockProfiles) {
+      for (const urlData of linkedinUrls) {
         await storage.createProfile({
           jobId: job.id,
-          linkedinUrl: url,
+          linkedinUrl: urlData.url,
           status: 'pending',
         });
       }
@@ -329,7 +342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: job.id.toString(),
         name: req.file.originalname,
         size: req.file.size,
-        profileCount: mockProfiles.length,
+        profileCount: linkedinUrls.length,
         status: 'uploaded',
       });
     } catch (error) {

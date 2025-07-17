@@ -107,7 +107,7 @@ export default function FileUploadSection() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.xlsx,.xls';
-    input.onchange = handleFileSelect;
+    input.onchange = (e) => handleFileSelect(e as React.ChangeEvent<HTMLInputElement>);
     input.click();
   };
 
