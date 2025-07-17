@@ -1,6 +1,7 @@
 import { storage } from '../storage';
 import { linkedInService } from './linkedin-api';
 import { excelProcessor } from './excel-processor';
+import { aiProfileExtractor } from './ai-profile-extractor';
 
 interface JobData {
   jobId: number;
@@ -233,9 +234,37 @@ class JobQueue {
 
     while (retryCount < maxRetries) {
       try {
-        return await linkedInService.withRateLimit(
-          () => linkedInService.getProfile(accessToken, profileUrl)
-        );
+        // Use AI profile extractor to get profile data
+        const extractedProfile = await aiProfileExtractor.extractProfileFromURL(profileUrl);
+        
+        // Convert to LinkedIn profile format for compatibility
+        return {
+          id: profileUrl.split('/').pop() || 'unknown',
+          firstName: extractedProfile.firstName,
+          lastName: extractedProfile.lastName,
+          headline: extractedProfile.headline,
+          summary: extractedProfile.summary,
+          industry: extractedProfile.industry,
+          location: extractedProfile.location,
+          publicProfileUrl: profileUrl,
+          positions: extractedProfile.experience.map(exp => ({
+            title: exp.title,
+            company: exp.company,
+            startDate: exp.duration.split('-')[0] || '',
+            endDate: exp.duration.split('-')[1] || undefined,
+            description: exp.description
+          })),
+          education: extractedProfile.education.map(edu => ({
+            school: edu.school,
+            degree: edu.degree,
+            fieldOfStudy: edu.field,
+            startDate: edu.year,
+            endDate: edu.year
+          })),
+          skills: extractedProfile.skills,
+          currentPosition: extractedProfile.currentPosition,
+          currentCompany: extractedProfile.currentCompany
+        };
       } catch (error) {
         const errorType = this.categorizeError(error);
         

@@ -1,6 +1,5 @@
-import * as XLSX from 'xlsx';
-import * as fs from 'fs';
-import * as path from 'path';
+import fs from 'fs';
+import path from 'path';
 import { storage } from '../storage';
 
 interface LinkedInUrl {
@@ -20,9 +19,10 @@ interface ProcessedProfile {
 class ExcelProcessor {
   async parseLinkedInUrls(filePath: string): Promise<LinkedInUrl[]> {
     try {
-      const workbook = XLSX.readFile(filePath);
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.default.readFile(filePath);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+      const data = XLSX.default.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
       const linkedinUrls: LinkedInUrl[] = [];
       const linkedinPattern = /linkedin\.com\/(in|pub)\//i;
@@ -115,8 +115,9 @@ class ExcelProcessor {
       });
 
       // Create workbook
-      const workbook = XLSX.utils.book_new();
-      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.default.utils.book_new();
+      const worksheet = XLSX.default.utils.json_to_sheet(excelData);
 
       // Auto-size columns
       const colWidths = Object.keys(excelData[0] || {}).map(key => ({
@@ -124,10 +125,10 @@ class ExcelProcessor {
       }));
       worksheet['!cols'] = colWidths;
 
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'LinkedIn Data');
+      XLSX.default.utils.book_append_sheet(workbook, worksheet, 'LinkedIn Data');
 
       // Generate buffer
-      const buffer = XLSX.write(workbook, { 
+      const buffer = XLSX.default.write(workbook, { 
         type: 'buffer', 
         bookType: 'xlsx',
         compression: true 
@@ -165,8 +166,9 @@ class ExcelProcessor {
       }));
 
       // Create workbook
-      const workbook = XLSX.utils.book_new();
-      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.default.utils.book_new();
+      const worksheet = XLSX.default.utils.json_to_sheet(excelData);
 
       // Auto-size columns
       const colWidths = Object.keys(excelData[0] || {}).map(key => ({
@@ -174,7 +176,7 @@ class ExcelProcessor {
       }));
       worksheet['!cols'] = colWidths;
 
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
+      XLSX.default.utils.book_append_sheet(workbook, worksheet, 'Results');
 
       // Save to file
       const resultsDir = 'results';
@@ -183,7 +185,7 @@ class ExcelProcessor {
       }
 
       const resultPath = path.join(resultsDir, `job_${jobId}_results.xlsx`);
-      XLSX.writeFile(workbook, resultPath);
+      XLSX.default.writeFile(workbook, resultPath);
 
       return resultPath;
     } catch (error) {

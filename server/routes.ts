@@ -400,10 +400,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         batchSize: parseInt(batchSize) || 50,
       });
       
-      // Start demo processing simulation
-      setTimeout(async () => {
-        await simulateJobProcessing(job.id);
-      }, 1000);
+      // Add job to the queue for AI-powered processing
+      await jobQueue.addJob({
+        jobId: job.id,
+        userId: user.id,
+        filePath: job.filePath,
+        batchSize: parseInt(batchSize) || 50,
+      });
 
       res.json({ jobId: job.id, status: 'started' });
     } catch (error) {
