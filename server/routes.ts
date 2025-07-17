@@ -94,11 +94,11 @@ async function simulateJobProcessing(jobId: number) {
 }
 
 // Create sample data for demo
-async function createSampleData() {
+async function createSampleData(userId: number) {
   try {
     // Create a completed job with sample data
     const completedJob = await storage.createJob({
-      userId: 1,
+      userId: userId,
       fileName: "sample_linkedin_profiles.xlsx",
       totalProfiles: 8,
       batchSize: 50,
@@ -166,7 +166,7 @@ async function createSampleData() {
     }
 
     // Update API stats
-    await storage.updateApiStats(1, {
+    await storage.updateApiStats(userId, {
       requestsUsed: 156,
       requestsLimit: 1000,
       resetTime: new Date(Date.now() + 45 * 60 * 1000), // 45 minutes from now
@@ -182,27 +182,32 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
 
+// Helper function to get or create demo user
+async function getDemoUser() {
+  let user = await storage.getUserByUsername("demo_user");
+  if (!user) {
+    user = await storage.createUser({
+      username: "demo_user",
+      password: "demo_password",
+    });
+  }
+  return user;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize sample data for demo
   setTimeout(async () => {
-    const jobs = await storage.getJobsByUser(1);
-    if (jobs.length === 0) {
-      await createSampleData();
+    const user = await storage.getUserByUsername("demo_user");
+    if (user) {
+      const jobs = await storage.getJobsByUser(user.id);
+      if (jobs.length === 0) {
+        await createSampleData(user.id);
+      }
     }
   }, 1000);
   // Auth routes
   app.get("/api/auth/status", async (req, res) => {
-    // Create demo user if doesn't exist
-    let user = await storage.getUser(1);
-    if (!user) {
-      user = await storage.createUser({
-        username: "demo_user",
-        password: "demo_password",
-      });
-      
-      // Create sample data for demo
-      await createSampleData();
-    }
+    const user = await getDemoUser();
     
     res.json({
       isAuthenticated: true,
@@ -214,8 +219,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/auth/status-detailed", async (req, res) => {
-    const user = await storage.getUser(1);
-    const apiStats = await storage.getApiStats(1);
+    const user = await getDemoUser();
+    const apiStats = await storage.getApiStats(user.id);
     
     res.json({
       linkedinConnected: !!user?.linkedinAccessToken,
@@ -233,11 +238,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/linkedin", async (req, res) => {
     try {
       // For demo purposes, simulate successful LinkedIn connection
-      const userId = 1;
+      const user = await getDemoUser();
       const mockTokenExpiry = new Date(Date.now() + 3600 * 1000); // 1 hour from now
       
       await storage.updateUserLinkedInTokens(
-        userId,
+        user.id,
         'mock_access_token_' + Date.now(),
         'mock_refresh_token_' + Date.now(),
         mockTokenExpiry
@@ -269,10 +274,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const tokens = await linkedInService.exchangeCodeForTokens(code as string);
-      const userId = 1; // Mock user ID
+      const user = await getDemoUser();
       
       await storage.updateUserLinkedInTokens(
-        userId, 
+        user.id, 
         tokens.accessToken, 
         tokens.refreshToken, 
         new Date(Date.now() + tokens.expiresIn * 1000)
@@ -301,9 +306,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
 
       // Create a job for this upload
-      const userId = 1;
+      const user = await getDemoUser();
       const job = await storage.createJob({
-        userId,
+        userId: user.id,
         fileName: req.file.originalname || 'uploaded_file.xlsx',
         totalProfiles: mockProfiles.length,
         batchSize: 50,
@@ -335,8 +340,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/files/uploaded", async (req, res) => {
     // Return any recently uploaded files from jobs
     try {
-      const userId = 1;
-      const jobs = await storage.getJobsByUser(userId);
+      const user = await getDemoUser();
+      const jobs = await storage.getJobsByUser(user.id);
       const uploadedFiles = jobs
         .filter(job => job.status === 'pending' || job.status === 'processing')
         .slice(0, 5)
@@ -367,7 +372,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/jobs/start", async (req, res) => {
     try {
       const { fileId, batchSize } = req.body;
-      const userId = 1; // Mock user ID
+      const user = await getDemoUser();
 
       // Get the job by ID
       const job = await storage.getJob(parseInt(fileId));
@@ -395,8 +400,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/jobs/current-status", async (req, res) => {
     try {
-      const userId = 1; // Mock user ID
-      const activeJob = await storage.getActiveJob(userId);
+      const user = await getDemoUser();
+      const activeJob = await storage.getActiveJob(user.id);
       
       if (!activeJob) {
         return res.json(null);
@@ -430,8 +435,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/jobs/recent", async (req, res) => {
     try {
-      const userId = 1; // Mock user ID
-      const jobs = await storage.getJobsByUser(userId);
+      const user = await getDemoUser();
+      const jobs = await storage.getJobsByUser(user.id);
       
       const recentJobs = jobs.slice(0, 10).map(job => ({
         id: job.id,
@@ -502,8 +507,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Statistics routes
   app.get("/api/stats/overview", async (req, res) => {
     try {
-      const userId = 1; // Mock user ID
-      const stats = await storage.getJobStats(userId);
+      const user = await getDemoUser();
+      const stats = await storage.getJobStats(user.id);
       res.json(stats);
     } catch (error) {
       res.status(500).json({ error: "Failed to get overview stats" });
@@ -512,8 +517,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/stats/errors", async (req, res) => {
     try {
-      const userId = 1; // Mock user ID
-      const errorBreakdown = await storage.getErrorBreakdown(userId);
+      const user = await getDemoUser();
+      const errorBreakdown = await storage.getErrorBreakdown(user.id);
       res.json(errorBreakdown);
     } catch (error) {
       res.status(500).json({ error: "Failed to get error breakdown" });
@@ -522,8 +527,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/stats/export-counts", async (req, res) => {
     try {
-      const userId = 1; // Mock user ID
-      const stats = await storage.getJobStats(userId);
+      const user = await getDemoUser();
+      const stats = await storage.getJobStats(user.id);
       res.json({
         successful: stats.successfulProfiles,
         failed: stats.failedProfiles,
@@ -538,9 +543,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/export/:type", async (req, res) => {
     try {
       const { type } = req.params;
-      const userId = 1; // Mock user ID
+      const user = await getDemoUser();
       
-      const excelBuffer = await excelProcessor.exportResults(userId, type as 'successful' | 'failed' | 'all');
+      const excelBuffer = await excelProcessor.exportResults(user.id, type as 'successful' | 'failed' | 'all');
       
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename=linkedin_data_${type}_${new Date().toISOString().split('T')[0]}.xlsx`);
