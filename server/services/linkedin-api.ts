@@ -117,27 +117,33 @@ export class LinkedInService {
     // Extract LinkedIn ID from URL
     const linkedinId = this.extractLinkedInId(profileUrl);
     if (!linkedinId) {
-      throw new Error('Invalid LinkedIn profile URL');
+      throw new Error('profile_url_invalid');
     }
 
     try {
+      console.log(`Fetching LinkedIn profile for ID: ${linkedinId}`);
+      
       // Get basic profile information
       const profileResponse = await fetch('https://api.linkedin.com/v2/people/(id:' + linkedinId + ')', {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Connection': 'Keep-Alive',
+          'X-Restli-Protocol-Version': '2.0.0',
         },
       });
 
       if (!profileResponse.ok) {
+        console.error(`LinkedIn API error: ${profileResponse.status} - ${profileResponse.statusText}`);
         if (profileResponse.status === 403) {
           throw new Error('access_restricted');
         } else if (profileResponse.status === 404) {
-          throw new Error('not_found');
+          throw new Error('profile_not_found');
         } else if (profileResponse.status === 429) {
-          throw new Error('rate_limit');
+          throw new Error('rate_limit_exceeded');
+        } else if (profileResponse.status === 401) {
+          throw new Error('unauthorized_token_expired');
         }
-        throw new Error('API request failed');
+        throw new Error(`linkedin_api_error_${profileResponse.status}`);
       }
 
       const profileData = await profileResponse.json();

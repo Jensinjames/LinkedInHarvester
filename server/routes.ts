@@ -351,23 +351,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const remaining = activeJob.totalProfiles - totalProcessed;
       
       res.json({
-        fileName: activeJob.fileName,
-        status: activeJob.status,
-        progress: {
-          percentage,
-          processed: totalProcessed,
-          total: activeJob.totalProfiles,
+        hasActiveJob: true,
+        currentJob: {
+          id: activeJob.id,
+          fileName: activeJob.fileName,
+          status: activeJob.status,
+          progress: percentage,
+          processedProfiles: totalProcessed,
+          totalProfiles: activeJob.totalProfiles,
           successful: activeJob.successfulProfiles || 0,
           retrying: activeJob.retryingProfiles || 0,
           failed: activeJob.failedProfiles || 0,
           remaining,
-          eta: activeJob.estimatedCompletion ? 
+          processingRate: activeJob.processingRate || 'Calculating...',
+          estimatedCompletion: activeJob.estimatedCompletion ? 
             Math.ceil((activeJob.estimatedCompletion.getTime() - Date.now()) / (1000 * 60)) + 'm' : 
             'Calculating...',
-          rate: activeJob.processingRate || 'Calculating...',
         },
       });
     } catch (error) {
+      console.error('Job status error:', error);
       res.status(500).json({ error: "Failed to get job status" });
     }
   });
@@ -466,6 +469,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete job" });
+    }
+  });
+
+  // System Health endpoint
+  app.get("/api/system/health", async (req, res) => {
+    try {
+      const startTime = Date.now();
+      const user = await getDemoUser();
+      const apiStats = await storage.getApiStats(user.id);
+      const responseTime = Date.now() - startTime;
+      
+      res.json({
+        linkedinConnected: !!user?.linkedinAccessToken,
+        proxyActive: true, // Mock proxy status
+        rateLimitInfo: {
+          used: apiStats?.requestsUsed || 0,
+          limit: apiStats?.requestsLimit || 1000,
+          resetTime: apiStats?.resetTime ? 
+            Math.ceil((apiStats.resetTime.getTime() - Date.now()) / (1000 * 60)) + ' minutes' : 
+            'Unknown',
+        },
+        databaseStatus: 'connected',
+        apiResponseTime: responseTime,
+      });
+    } catch (error) {
+      console.error('Health check error:', error);
+      res.status(500).json({ error: "Failed to get system health" });
     }
   });
 

@@ -11,15 +11,20 @@ interface JobStatus {
     progress: number;
     processedProfiles: number;
     totalProfiles: number;
+    successful: number;
+    retrying: number;
+    failed: number;
+    remaining: number;
     processingRate?: string;
     estimatedCompletion?: string;
   };
 }
 
 export function useJobProcessing() {
-  const { data: jobStatus, isLoading } = useQuery<JobStatus>({
+  const { data: jobStatus, isLoading, error } = useQuery<JobStatus | null>({
     queryKey: ["/api/jobs/current-status"],
     refetchInterval: 5000, // Poll every 5 seconds
+    retry: 3,
   });
 
   const startJobMutation = useMutation({
@@ -111,6 +116,7 @@ export function useJobProcessing() {
   return {
     jobStatus,
     isLoading,
+    error,
     hasActiveJob: jobStatus?.hasActiveJob ?? false,
     currentJob: jobStatus?.currentJob,
     startJob: startJobMutation.mutate,
