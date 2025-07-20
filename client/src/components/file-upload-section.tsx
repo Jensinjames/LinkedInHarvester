@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -152,9 +152,9 @@ export default function FileUploadSection() {
         {/* Processing Controls */}
         <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
           <div className="flex items-center space-x-4">
-            <label className="text-sm font-medium text-text-dark">Batch Size:</label>
+            <label htmlFor="batch-size-select" className="text-sm font-medium text-text-dark">Batch Size:</label>
             <Select value={batchSize} onValueChange={setBatchSize}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger id="batch-size-select" name="batchSize" className="w-[140px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

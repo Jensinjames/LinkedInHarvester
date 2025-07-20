@@ -197,9 +197,9 @@ export default function AIAssistant() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">Job</label>
+              <label htmlFor="job-select" className="text-sm font-medium mb-2 block">Job</label>
               <Select value={selectedJobId} onValueChange={setSelectedJobId}>
-                <SelectTrigger>
+                <SelectTrigger id="job-select" name="job">
                   <SelectValue placeholder="Choose a completed job" />
                 </SelectTrigger>
                 <SelectContent>
@@ -214,8 +214,11 @@ export default function AIAssistant() {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">Target Job Title (Optional)</label>
+              <label htmlFor="job-title-input" className="text-sm font-medium mb-2 block">Target Job Title (Optional)</label>
               <Input
+                id="job-title-input"
+                name="jobTitle"
+                autoComplete="organization-title"
                 placeholder="e.g., Software Engineer, Product Manager"
                 value={jobTitle}
                 onChange={(e) => setJobTitle(e.target.value)}
@@ -463,7 +466,11 @@ export default function AIAssistant() {
 
                 {/* Chat Input */}
                 <div className="flex space-x-2">
+                  <label htmlFor="chat-textarea" className="sr-only">Chat message</label>
                   <Textarea
+                    id="chat-textarea"
+                    name="chatMessage"
+                    aria-label="Type your message about LinkedIn data analysis"
                     placeholder="Ask me anything about your LinkedIn data..."
                     value={chatMessage}
                     onChange={(e) => setChatMessage(e.target.value)}
