@@ -3,6 +3,13 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
+
+// Trust proxy only in production environments for rate limiting
+// Replit sets the X-Forwarded-For header, so we need to trust it
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1); // Trust first proxy
+}
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

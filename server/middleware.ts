@@ -55,6 +55,8 @@ export const globalRateLimit = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting in development
+  skip: () => process.env.NODE_ENV !== 'production',
 });
 
 export const authRateLimit = rateLimit({
@@ -64,12 +66,16 @@ export const authRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true, // Don't count successful requests
+  // Skip rate limiting in development
+  skip: () => process.env.NODE_ENV !== 'production',
 });
 
 export const uploadRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10, // Limit each IP to 10 uploads per hour
   message: 'Upload limit exceeded, please try again later.',
+  // Skip rate limiting in development
+  skip: () => process.env.NODE_ENV !== 'production',
 });
 
 // Security headers middleware
