@@ -213,20 +213,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No file uploaded" });
       }
 
+      // Validate file extension
+      const allowedExtensions = ['.xlsx', '.xls'];
+      const fileExtension = path.extname(req.file.originalname || '').toLowerCase();
+      
+      if (!allowedExtensions.includes(fileExtension)) {
+        return res.status(400).json({ 
+          error: "Invalid file format. Only Excel files (.xlsx, .xls) are supported." 
+        });
+      }
+
       // Parse LinkedIn URLs from the uploaded Excel file
       let linkedinUrls: LinkedInUrl[] = [];
       try {
         linkedinUrls = await excelProcessor.parseLinkedInUrls(req.file.path);
+        
+        if (linkedinUrls.length === 0) {
+          return res.status(400).json({ 
+            error: "No LinkedIn URLs found in the uploaded file. Please ensure your Excel file contains LinkedIn profile URLs." 
+          });
+        }
       } catch (parseError) {
         console.error('Excel parsing error:', parseError);
-        // If parsing fails, use demo data
-        linkedinUrls = [
-          { url: "https://linkedin.com/in/john-doe", rowIndex: 1 },
-          { url: "https://linkedin.com/in/jane-smith", rowIndex: 2 }, 
-          { url: "https://linkedin.com/in/mike-johnson", rowIndex: 3 },
-          { url: "https://linkedin.com/in/sarah-wilson", rowIndex: 4 },
-          { url: "https://linkedin.com/in/david-brown", rowIndex: 5 }
-        ].map((item, index) => ({ ...item, rowIndex: index + 1 }));
+        return res.status(400).json({ 
+          error: "Failed to parse Excel file. Please ensure it's a valid Excel file with LinkedIn URLs." 
+        });
       }
 
       // Create a job for this upload
@@ -406,6 +417,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ error: "Failed to stop job" });
+    }
+  });
+
+  app.post("/api/jobs/:id/cancel", async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      await storage.updateJobStatus(jobId, 'failed');
+      const jobQueue = container.get('jobQueue');
+      await jobQueue.stopJob(jobId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to cancel job" });
+    }
+  });
+
+  app.post("/api/jobs/:id/resume", async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      await storage.updateJobStatus(jobId, 'processing');
+      const jobQueue = container.get('jobQueue');
+      await jobQueue.resumeJob(jobId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to resume job" });
     }
   });
 

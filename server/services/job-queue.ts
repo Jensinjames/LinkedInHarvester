@@ -209,13 +209,25 @@ export class JobQueue {
       
       // Generate results file
       const profiles = await this.storage.getProfilesByJob(job.data.jobId);
-      const processedProfiles = profiles.map(p => ({
-        url: p.linkedinUrl,
-        status: p.status as 'success' | 'failed',
-        data: p.profileData ? (typeof p.profileData === 'string' ? JSON.parse(p.profileData) : p.profileData) : undefined,
-        error: p.errorMessage || undefined,
-        errorType: p.errorType || undefined,
-      }));
+      const processedProfiles = profiles.map(p => {
+        let profileData;
+        try {
+          profileData = p.profileData ? 
+            (typeof p.profileData === 'string' ? JSON.parse(p.profileData) : p.profileData) : 
+            undefined;
+        } catch (parseError) {
+          logger.error('Failed to parse profile data:', parseError);
+          profileData = undefined;
+        }
+        
+        return {
+          url: p.linkedinUrl,
+          status: p.status as 'success' | 'failed',
+          data: profileData,
+          error: p.errorMessage || undefined,
+          errorType: p.errorType || undefined,
+        };
+      });
 
       // Need to create exporter instance here
       const { ExcelExporter } = await import('./excel/exporter');
@@ -227,11 +239,17 @@ export class JobQueue {
         resultPath,
       });
 
+      // Clean up completed job from memory to prevent memory leaks
+      this.jobs.delete(job.id);
+
     } catch (error) {
       job.status = 'failed';
       await this.storage.updateJobStatus(job.data.jobId, 'failed', {
         completedAt: new Date(),
       });
+      
+      // Clean up failed job from memory to prevent memory leaks
+      this.jobs.delete(job.id);
     }
   }
 

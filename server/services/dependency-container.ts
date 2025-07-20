@@ -62,10 +62,19 @@ class DependencyContainer {
   }
 
   private createJobQueue(): JobQueue {
+    // Avoid circular dependency by getting services that are already registered
+    const storageService = this.services.storage;
+    const excelParserService = this.services.excelParser;
+    const aiExtractorService = this.services.aiProfileExtractor;
+    
+    if (!storageService || !excelParserService || !aiExtractorService) {
+      throw new Error('Required services not registered before JobQueue creation');
+    }
+    
     const service = new JobQueue(
-      this.get('storage'),
-      this.get('excelParser'),
-      this.get('aiProfileExtractor')
+      storageService,
+      excelParserService,
+      aiExtractorService
     );
     return service;
   }
