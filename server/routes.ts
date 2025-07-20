@@ -5,7 +5,7 @@ import path from "path";
 import { storage } from "./storage";
 import { linkedInService } from "./services/linkedin-api";
 import { excelProcessor } from "./services/excel-processor";
-import { jobQueue } from "./services/job-queue";
+import { container } from "./services/dependency-container";
 import { aiAssistant } from "./services/ai-assistant";
 import { jobSimulator } from "./services/job-simulator";
 import { insertJobSchema, type LinkedInUrl } from "@shared/schema";
@@ -311,6 +311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Add job to the queue for AI-powered processing
+      const jobQueue = container.get('jobQueue');
       await jobQueue.addJob({
         jobId: job.id,
         userId: user.id,
@@ -388,6 +389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const jobId = parseInt(req.params.id);
       await storage.updateJobStatus(jobId, 'paused');
+      const jobQueue = container.get('jobQueue');
       await jobQueue.pauseJob(jobId);
       res.json({ success: true });
     } catch (error) {
@@ -399,6 +401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const jobId = parseInt(req.params.id);
       await storage.updateJobStatus(jobId, 'failed');
+      const jobQueue = container.get('jobQueue');
       await jobQueue.stopJob(jobId);
       res.json({ success: true });
     } catch (error) {

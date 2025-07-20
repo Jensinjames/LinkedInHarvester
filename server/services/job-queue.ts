@@ -321,6 +321,5 @@ export class JobQueue {
   }
 }
 
-// This will be properly instantiated via dependency container
-// Temporary export for compatibility
-export let jobQueue: JobQueue;
+// JobQueue is now instantiated via the dependency container
+// Import from './dependency-container' to use the jobQueue instance

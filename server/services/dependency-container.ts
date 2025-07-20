@@ -47,22 +47,22 @@ class DependencyContainer {
 
   private createLinkedInService(): LinkedInService {
     // Create with dependencies injected
-    const service = new (require('./linkedin-api').LinkedInService)();
+    const service = new LinkedInService();
     return service;
   }
 
   private createAIProfileExtractor(): AIProfileExtractor {
-    const service = new (require('./ai-profile-extractor').AIProfileExtractor)();
+    const service = new AIProfileExtractor();
     return service;
   }
 
   private createJobSimulator(): JobSimulator {
-    const service = new (require('./job-simulator').JobSimulator)();
+    const service = new JobSimulator();
     return service;
   }
 
   private createJobQueue(): JobQueue {
-    const service = new (require('./job-queue').JobQueue)(
+    const service = new JobQueue(
       this.get('storage'),
       this.get('excelParser'),
       this.get('aiProfileExtractor')
