@@ -1,7 +1,10 @@
-import { storage } from '../storage';
-import { linkedInService } from './linkedin-api';
-import { excelProcessor } from './excel-processor';
-import { aiProfileExtractor } from './ai-profile-extractor';
+import type { IStorage } from '../storage';
+import type { ExcelParser } from './excel/parser';
+import type { AIProfileExtractor } from './ai-profile-extractor';
+import { CONFIG } from '../config/constants';
+import { ProfileExtractionError } from '../types/errors';
+import { logger } from '../utils/logger';
+import { performanceMonitor } from '../utils/performance-monitor';
 
 interface JobData {
   jobId: number;
@@ -17,7 +20,12 @@ interface ProcessingJob {
   retryCount: number;
 }
 
-class JobQueue {
+export class JobQueue {
+  constructor(
+    private storage: IStorage,
+    private excelParser: ExcelParser,
+    private aiProfileExtractor: AIProfileExtractor
+  ) {}
   private jobs: Map<number, ProcessingJob> = new Map();
   private processing: boolean = false;
   private currentJobId: number = 1;
@@ -81,7 +89,7 @@ class JobQueue {
   }
 
   private getNextJob(): ProcessingJob | null {
-    for (const job of this.jobs.values()) {
+    for (const job of Array.from(this.jobs.values())) {
       if (job.status === 'pending') {
         return job;
       }
@@ -94,12 +102,12 @@ class JobQueue {
       job.status = 'processing';
       
       // Update job status in storage
-      await storage.updateJobStatus(job.data.jobId, 'processing', {
+      await this.storage.updateJobStatus(job.data.jobId, 'processing', {
         startedAt: new Date(),
       });
 
       // Parse LinkedIn URLs from the uploaded file
-      const linkedinUrls = await excelProcessor.parseLinkedInUrls(job.data.filePath);
+      const linkedinUrls = await this.excelParser.parseLinkedInUrls(job.data.filePath);
       
       if (linkedinUrls.length === 0) {
         throw new Error('No LinkedIn URLs found in the uploaded file');
@@ -107,7 +115,7 @@ class JobQueue {
 
       // Create profile records
       for (const urlData of linkedinUrls) {
-        await storage.createProfile({
+        await this.storage.createProfile({
           jobId: job.data.jobId,
           linkedinUrl: urlData.url,
           status: 'pending',
@@ -115,7 +123,7 @@ class JobQueue {
       }
 
       // Get user's LinkedIn access token
-      const user = await storage.getUser(job.data.userId);
+      const user = await this.storage.getUser(job.data.userId);
       if (!user?.linkedinAccessToken) {
         throw new Error('LinkedIn authentication required');
       }
@@ -145,11 +153,11 @@ class JobQueue {
             );
 
             // Update profile record
-            const profiles = await storage.getProfilesByJob(job.data.jobId);
+            const profiles = await this.storage.getProfilesByJob(job.data.jobId);
             const profileRecord = profiles.find(p => p.linkedinUrl === urlData.url);
             
             if (profileRecord) {
-              await storage.updateProfileStatus(profileRecord.id, 'success', {
+              await this.storage.updateProfileStatus(profileRecord.id, 'success', {
                 profileData: profile,
                 extractedAt: new Date(),
               });
@@ -157,12 +165,12 @@ class JobQueue {
 
             successful++;
           } catch (error) {
-            const profiles = await storage.getProfilesByJob(job.data.jobId);
+            const profiles = await this.storage.getProfilesByJob(job.data.jobId);
             const profileRecord = profiles.find(p => p.linkedinUrl === urlData.url);
             
             if (profileRecord) {
               const errorType = this.categorizeError(error);
-              await storage.updateProfileStatus(profileRecord.id, 'failed', {
+              await this.storage.updateProfileStatus(profileRecord.id, 'failed', {
                 errorType,
                 errorMessage: error instanceof Error ? error.message : 'Unknown error',
                 lastAttempt: new Date(),
@@ -180,7 +188,7 @@ class JobQueue {
           const remaining = linkedinUrls.length - processed;
           const eta = remaining > 0 ? new Date(Date.now() + (remaining / parseFloat(rate)) * 60 * 1000) : null;
 
-          await storage.updateJobStatus(job.data.jobId, 'processing', {
+          await this.storage.updateJobStatus(job.data.jobId, 'processing', {
             processedProfiles: processed,
             successfulProfiles: successful,
             failedProfiles: failed,
@@ -189,36 +197,39 @@ class JobQueue {
           });
 
           // Rate limiting - wait between requests
-          await this.delay(2000); // 2 seconds between requests
+          await this.delay(CONFIG.JOB_PROCESSING.RATE_LIMIT_DELAY);
         }
 
         // Longer delay between batches
-        await this.delay(5000); // 5 seconds between batches
+        await this.delay(CONFIG.JOB_PROCESSING.BATCH_DELAY);
       }
 
       // Job completed
       job.status = 'completed';
       
       // Generate results file
-      const profiles = await storage.getProfilesByJob(job.data.jobId);
+      const profiles = await this.storage.getProfilesByJob(job.data.jobId);
       const processedProfiles = profiles.map(p => ({
         url: p.linkedinUrl,
         status: p.status as 'success' | 'failed',
         data: p.profileData ? (typeof p.profileData === 'string' ? JSON.parse(p.profileData) : p.profileData) : undefined,
-        error: p.errorMessage,
-        errorType: p.errorType,
+        error: p.errorMessage || undefined,
+        errorType: p.errorType || undefined,
       }));
 
-      const resultPath = await excelProcessor.saveJobResults(job.data.jobId, processedProfiles);
+      // Need to create exporter instance here
+      const { ExcelExporter } = await import('./excel/exporter');
+      const exporter = new ExcelExporter();
+      const resultPath = await exporter.saveJobResults(job.data.jobId, processedProfiles);
 
-      await storage.updateJobStatus(job.data.jobId, 'completed', {
+      await this.storage.updateJobStatus(job.data.jobId, 'completed', {
         completedAt: new Date(),
         resultPath,
       });
 
     } catch (error) {
       job.status = 'failed';
-      await storage.updateJobStatus(job.data.jobId, 'failed', {
+      await this.storage.updateJobStatus(job.data.jobId, 'failed', {
         completedAt: new Date(),
       });
     }
@@ -235,7 +246,7 @@ class JobQueue {
     while (retryCount < maxRetries) {
       try {
         // Use AI profile extractor to get profile data
-        const extractedProfile = await aiProfileExtractor.extractProfileFromURL(profileUrl);
+        const extractedProfile = await this.aiProfileExtractor.extractProfileFromURL(profileUrl);
         
         // Convert to LinkedIn profile format for compatibility
         return {
@@ -269,7 +280,7 @@ class JobQueue {
         const errorType = this.categorizeError(error);
         
         // Don't retry for certain error types
-        if (errorType === 'access_restricted' || errorType === 'not_found') {
+        if (errorType === CONFIG.ERROR_TYPES.ACCESS_RESTRICTED || errorType === CONFIG.ERROR_TYPES.NOT_FOUND) {
           throw error;
         }
 
@@ -292,13 +303,13 @@ class JobQueue {
       const message = error.message.toLowerCase();
       
       if (message.includes('captcha') || message.includes('challenge')) {
-        return 'captcha';
-      } else if (message.includes('not_found') || message.includes('404')) {
-        return 'not_found';
-      } else if (message.includes('access_restricted') || message.includes('403')) {
-        return 'access_restricted';
-      } else if (message.includes('rate_limit') || message.includes('429')) {
-        return 'rate_limit';
+        return CONFIG.ERROR_TYPES.CAPTCHA;
+      } else if (message.includes('not found') || message.includes('404')) {
+        return CONFIG.ERROR_TYPES.NOT_FOUND;
+      } else if (message.includes('restricted') || message.includes('403') || message.includes('unauthorized')) {
+        return CONFIG.ERROR_TYPES.ACCESS_RESTRICTED;
+      } else if (message.includes('rate limit') || message.includes('429')) {
+        return CONFIG.ERROR_TYPES.RATE_LIMIT;
       }
     }
     
@@ -310,4 +321,6 @@ class JobQueue {
   }
 }
 
-export const jobQueue = new JobQueue();
+// This will be properly instantiated via dependency container
+// Temporary export for compatibility
+export let jobQueue: JobQueue;

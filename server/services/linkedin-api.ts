@@ -30,7 +30,7 @@ interface LinkedInProfile {
   }>;
 }
 
-class LinkedInService {
+export class LinkedInService {
   private clientId: string;
   private clientSecret: string;
   private redirectUri: string;

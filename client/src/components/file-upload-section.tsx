@@ -1,12 +1,12 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { toast } from "@/hooks/use-toast";
 import { CloudUpload, FileSpreadsheet, X, Play, Pause } from "lucide-react";
-import { uploadFile } from "@/lib/file-utils";
+import { useFileUpload } from "@/hooks/use-file-upload";
+import { useJobProcessing } from "@/hooks/use-job-processing";
 
 interface UploadedFile {
   id: string;
@@ -17,52 +17,29 @@ interface UploadedFile {
 }
 
 export default function FileUploadSection() {
-  const [dragActive, setDragActive] = useState(false);
   const [batchSize, setBatchSize] = useState("50");
+  
+  const {
+    dragActive,
+    setDragActive,
+    handleDrop,
+    openFileDialog,
+    isUploading,
+  } = useFileUpload();
+
+  const {
+    hasActiveJob,
+    currentJob,
+    startJob,
+    pauseJob,
+    resumeJob,
+    isStarting,
+    isPausing,
+    isResuming,
+  } = useJobProcessing();
 
   const { data: uploadedFiles = [], isLoading } = useQuery<UploadedFile[]>({
     queryKey: ["/api/files/uploaded"],
-  });
-
-  const uploadMutation = useMutation({
-    mutationFn: async (file: File) => {
-      return await uploadFile(file);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/files/uploaded"] });
-      toast({
-        title: "File uploaded successfully",
-        description: "Your Excel file has been processed and is ready for LinkedIn data extraction.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Upload failed",
-        description: "Failed to upload and process the Excel file. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const startProcessingMutation = useMutation({
-    mutationFn: async (data: { fileId: string; batchSize: number }) => {
-      const response = await apiRequest("POST", "/api/jobs/start", data);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      toast({
-        title: "Processing started",
-        description: "LinkedIn profile extraction has been initiated.",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Failed to start processing",
-        description: "Could not initiate the LinkedIn data extraction process.",
-        variant: "destructive",
-      });
-    },
   });
 
   const removeFileMutation = useMutation({
@@ -75,49 +52,23 @@ export default function FileUploadSection() {
     },
   });
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(false);
-    
-    const files = Array.from(e.dataTransfer.files);
-    const excelFile = files.find(file => 
-      file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-      file.type === 'application/vnd.ms-excel'
-    );
-    
-    if (excelFile) {
-      uploadMutation.mutate(excelFile);
-    } else {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload Excel files (.xlsx) only.",
-        variant: "destructive",
-      });
-    }
-  }, [uploadMutation]);
-
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      uploadMutation.mutate(file);
-    }
-  }, [uploadMutation]);
-
-  const openFileDialog = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.xlsx,.xls';
-    input.onchange = (e) => handleFileSelect(e as React.ChangeEvent<HTMLInputElement>);
-    input.click();
-  };
-
   const handleStartProcessing = () => {
     const firstUploadedFile = uploadedFiles.find(f => f.status === 'uploaded');
     if (firstUploadedFile) {
-      startProcessingMutation.mutate({
+      startJob({
         fileId: firstUploadedFile.id,
         batchSize: parseInt(batchSize),
       });
+    }
+  };
+
+  const handlePauseResume = () => {
+    if (currentJob) {
+      if (currentJob.status === 'processing') {
+        pauseJob(currentJob.id);
+      } else if (currentJob.status === 'paused') {
+        resumeJob(currentJob.id);
+      }
     }
   };
 
@@ -155,9 +106,9 @@ export default function FileUploadSection() {
           </p>
           <Button 
             className="bg-azure-blue text-white hover:bg-azure-dark"
-            disabled={uploadMutation.isPending}
+            disabled={isUploading}
           >
-            {uploadMutation.isPending ? 'Uploading...' : 'Choose Files'}
+            {isUploading ? 'Uploading...' : 'Choose Files'}
           </Button>
         </div>
 
@@ -215,20 +166,33 @@ export default function FileUploadSection() {
             </Select>
           </div>
           <div className="flex space-x-3">
-            <Button
-              variant="outline"
-              className="border-gray-300 text-neutral-gray hover:bg-gray-50"
-            >
-              <Pause className="mr-2 h-4 w-4" />
-              Pause
-            </Button>
+            {hasActiveJob && currentJob && (
+              <Button
+                variant="outline"
+                onClick={handlePauseResume}
+                disabled={isPausing || isResuming}
+                className="border-gray-300 text-neutral-gray hover:bg-gray-50"
+              >
+                {currentJob.status === 'processing' ? (
+                  <>
+                    <Pause className="mr-2 h-4 w-4" />
+                    {isPausing ? 'Pausing...' : 'Pause'}
+                  </>
+                ) : (
+                  <>
+                    <Play className="mr-2 h-4 w-4" />
+                    {isResuming ? 'Resuming...' : 'Resume'}
+                  </>
+                )}
+              </Button>
+            )}
             <Button
               onClick={handleStartProcessing}
-              disabled={startProcessingMutation.isPending || uploadedFiles.length === 0}
+              disabled={isStarting || uploadedFiles.length === 0 || hasActiveJob}
               className="bg-azure-blue text-white hover:bg-azure-dark"
             >
               <Play className="mr-2 h-4 w-4" />
-              Start Processing
+              {isStarting ? 'Starting...' : 'Start Processing'}
             </Button>
           </div>
         </div>

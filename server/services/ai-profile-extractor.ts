@@ -25,7 +25,7 @@ interface ExtractedProfile {
   }>;
 }
 
-class AIProfileExtractor {
+export class AIProfileExtractor {
   private openai: OpenAI;
 
   constructor() {
@@ -158,7 +158,10 @@ class AIProfileExtractor {
       
       // Update job progress
       const progress = Math.round(((i + batch.length) / linkedinUrls.length) * 100);
-      await storage.updateJobProgress(jobId, i + batch.length, progress);
+      await storage.updateJobStatus(jobId, 'processing', {
+        processedProfiles: i + batch.length,
+        processingRate: `${batch.length} profiles/batch`
+      });
       
       // Small delay between batches to avoid rate limits
       if (i + batchSize < linkedinUrls.length) {

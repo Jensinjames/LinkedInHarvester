@@ -111,3 +111,18 @@ export type InsertApiStats = z.infer<typeof insertApiStatsSchema>;
 
 export type AiAnalysis = typeof aiAnalyses.$inferSelect;
 export type InsertAiAnalysis = z.infer<typeof insertAiAnalysisSchema>;
+
+// Shared interfaces
+export interface LinkedInUrl {
+  url: string;
+  rowIndex: number;
+  additionalData?: Record<string, any>;
+}
+
+export interface ProcessedProfile {
+  url: string;
+  status: 'success' | 'failed';
+  data?: any;
+  error?: string;
+  errorType?: string;
+}

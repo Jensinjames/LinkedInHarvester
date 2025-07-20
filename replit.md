@@ -16,6 +16,12 @@ This is a professional LinkedIn API integration tool built with a React frontend
 - ✓ Integrated PostgreSQL database with Drizzle ORM (July 17, 2025)
 - ✓ Migrated from in-memory storage to persistent database storage
 - ✓ Created sample data in database with 32 total profiles across multiple jobs
+- ✓ Completed systematic architecture improvements across 5 phases (July 20, 2025):
+  - Phase 1: Fixed TypeScript/LSP errors, extracted business logic to services
+  - Phase 2: Implemented dependency injection, split Excel processor into parser/exporter
+  - Phase 3: Added error boundaries, created custom hooks for file upload and job processing
+  - Centralized configuration management with constants
+  - Added custom error types for better error handling
 
 ## User Preferences
 
@@ -30,13 +36,17 @@ Preferred communication style: Simple, everyday language.
 - **UI Framework**: Radix UI components with shadcn/ui design system
 - **Styling**: Tailwind CSS with custom Azure Portal-inspired color scheme
 - **Build Tool**: Vite for fast development and optimized builds
+- **Error Handling**: React error boundaries for graceful error recovery
+- **Custom Hooks**: Specialized hooks for file upload and job processing logic
 
 ### Backend Architecture
 - **Framework**: Express.js with TypeScript
 - **Database**: PostgreSQL with Drizzle ORM
-- **File Processing**: Multer for file uploads, xlsx library for Excel parsing
+- **File Processing**: Multer for file uploads, xlsx library for Excel parsing (split into parser/exporter services)
 - **Authentication**: LinkedIn OAuth integration
-- **Job Processing**: Custom queue system for batch profile extraction
+- **Job Processing**: Custom queue system with dependency injection for batch profile extraction
+- **Service Architecture**: Dependency injection container for decoupled services
+- **Error Handling**: Custom error types with proper error categorization
 
 ### Data Storage Solutions
 - **Primary Database**: PostgreSQL with persistent storage (fully operational)
@@ -52,6 +62,15 @@ Preferred communication style: Simple, everyday language.
 - **Jobs**: Batch processing job tracking with status and progress
 - **Profiles**: Individual LinkedIn profile extraction records
 - **API Stats**: Rate limiting and usage tracking
+
+### Service Architecture
+- **ExcelParser**: Handles Excel file parsing and LinkedIn URL extraction
+- **ExcelExporter**: Manages result export and Excel file generation
+- **JobSimulator**: Simulates job processing for demo mode
+- **AIProfileExtractor**: Uses OpenAI for intelligent profile data extraction
+- **LinkedInService**: Manages LinkedIn OAuth and API interactions
+- **JobQueue**: Orchestrates batch profile processing with retry logic
+- **DependencyContainer**: Manages service dependencies and initialization
 
 ### Authentication & Authorization
 - LinkedIn OAuth 2.0 integration for API access

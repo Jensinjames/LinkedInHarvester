@@ -1,20 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { storage } from '../storage';
-
-interface LinkedInUrl {
-  url: string;
-  rowIndex: number;
-  additionalData?: Record<string, any>;
-}
-
-interface ProcessedProfile {
-  url: string;
-  status: 'success' | 'failed';
-  data?: any;
-  error?: string;
-  errorType?: string;
-}
+import type { LinkedInUrl, ProcessedProfile } from '@shared/schema';
 
 class ExcelProcessor {
   async parseLinkedInUrls(filePath: string): Promise<LinkedInUrl[]> {
@@ -193,7 +180,7 @@ class ExcelProcessor {
     }
   }
 
-  validateExcelFile(filePath: string): { valid: boolean; error?: string } {
+  async validateExcelFile(filePath: string): Promise<{ valid: boolean; error?: string }> {
     try {
       if (!fs.existsSync(filePath)) {
         return { valid: false, error: 'File does not exist' };
@@ -207,7 +194,8 @@ class ExcelProcessor {
       }
 
       // Try to read the file
-      const workbook = XLSX.readFile(filePath);
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.default.readFile(filePath);
       if (!workbook.SheetNames.length) {
         return { valid: false, error: 'No worksheets found in file' };
       }
