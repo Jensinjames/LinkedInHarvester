@@ -7,6 +7,17 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { CloudUpload, FileSpreadsheet, X, Play, Pause } from "lucide-react";
 import { useFileUpload } from "@/hooks/use-file-upload";
 import { useJobProcessing } from "@/hooks/use-job-processing";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface UploadedFile {
   id: string;
@@ -135,14 +146,34 @@ export default function FileUploadSection() {
                   }`}>
                     {file.status.charAt(0).toUpperCase() + file.status.slice(1)}
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeFileMutation.mutate(file.id)}
-                    className="text-neutral-gray hover:text-error-red"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-neutral-gray hover:text-error-red"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Remove file?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to remove "{file.name}"? This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => removeFileMutation.mutate(file.id)}
+                          className="bg-error-red hover:bg-red-700"
+                        >
+                          Remove
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             ))}

@@ -472,6 +472,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Storage routes
+  app.get("/api/storage/stats", async (req, res) => {
+    try {
+      const user = await getDemoUser();
+      const jobs = await storage.getJobsByUser(user.id);
+      const stats = await storage.getJobStats(user.id);
+      
+      res.json({
+        totalJobs: jobs.length,
+        totalProfiles: stats.totalProfiles,
+        successfulProfiles: stats.successfulProfiles,
+        failedProfiles: stats.failedProfiles,
+        dataSize: "2.3 MB", // Mock data size
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get storage stats" });
+    }
+  });
+
+  app.get("/api/jobs", async (req, res) => {
+    try {
+      const user = await getDemoUser();
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const search = req.query.search as string || "";
+      
+      const jobs = await storage.getJobsByUser(user.id);
+      
+      // Filter by search term
+      const filteredJobs = search 
+        ? jobs.filter(job => job.fileName.toLowerCase().includes(search.toLowerCase()))
+        : jobs;
+      
+      // Paginate
+      const startIndex = (page - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedJobs = filteredJobs.slice(startIndex, endIndex);
+      
+      res.json({
+        jobs: paginatedJobs,
+        total: filteredJobs.length,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get jobs" });
+    }
+  });
+
+  app.get("/api/jobs/:id/profiles", async (req, res) => {
+    try {
+      const jobId = parseInt(req.params.id);
+      const profiles = await storage.getProfilesByJob(jobId);
+      
+      res.json({
+        profiles: profiles,
+        total: profiles.length,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get profiles" });
+    }
+  });
+
   // System Health endpoint
   app.get("/api/system/health", async (req, res) => {
     try {

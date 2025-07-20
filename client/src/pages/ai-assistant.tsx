@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { toast } from "@/hooks/use-toast";
 import { type Job, type Profile } from "@shared/schema";
+import StorageDataTable from "@/components/storage-data-table";
 import { 
   Bot, 
   Brain, 
@@ -24,7 +25,8 @@ import {
   MapPin,
   Briefcase,
   Star,
-  Lightbulb
+  Lightbulb,
+  Database
 } from "lucide-react";
 
 interface ProfileAnalysis {
@@ -257,7 +259,7 @@ export default function AIAssistant() {
       </Card>
 
       <Tabs defaultValue="analysis" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="analysis" className="flex items-center space-x-2">
             <Brain className="h-4 w-4" />
             <span>Bulk Analysis</span>
@@ -269,6 +271,10 @@ export default function AIAssistant() {
           <TabsTrigger value="chat" className="flex items-center space-x-2">
             <MessageSquare className="h-4 w-4" />
             <span>AI Chat</span>
+          </TabsTrigger>
+          <TabsTrigger value="storage" className="flex items-center space-x-2">
+            <Database className="h-4 w-4" />
+            <span>Storage Data</span>
           </TabsTrigger>
         </TabsList>
 
@@ -505,6 +511,11 @@ export default function AIAssistant() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Storage Data Tab */}
+        <TabsContent value="storage" className="space-y-4">
+          <StorageDataTable />
         </TabsContent>
       </Tabs>
     </div>
