@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
@@ -8,7 +8,9 @@ import { excelProcessor } from "./services/excel-processor";
 import { container } from "./services/dependency-container";
 import { aiAssistant } from "./services/ai-assistant";
 import { jobSimulator } from "./services/job-simulator";
-import { insertJobSchema, type LinkedInUrl } from "@shared/schema";
+import { insertJobSchema, loginSchema, insertUserSchema, type LinkedInUrl } from "@shared/schema";
+import { hashPassword, verifyPassword, generateAccessToken, generateRefreshToken, verifyRefreshToken, getRefreshTokenExpiry } from "./auth";
+import { authenticateToken, optionalAuth, globalRateLimit, authRateLimit, uploadRateLimit, securityHeaders, validateOrigin } from "./middleware";
 
 // Create sample data for demo
 async function createSampleData(userId: number) {
@@ -99,44 +101,188 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
 });
 
-// Helper function to get or create demo user
-async function getDemoUser() {
-  let user = await storage.getUserByUsername("demo_user");
-  if (!user) {
-    user = await storage.createUser({
-      username: "demo_user",
-      password: "demo_password",
-    });
-  }
-  return user;
+// Helper function to create auth tokens response
+function createAuthResponse(user: any, accessToken: string, refreshToken: string) {
+  return {
+    user: {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      linkedinConnected: !!user.linkedinAccessToken,
+    },
+    accessToken,
+    refreshToken,
+  };
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize sample data for demo
-  setTimeout(async () => {
-    const user = await storage.getUserByUsername("demo_user");
-    if (user) {
-      const jobs = await storage.getJobsByUser(user.id);
-      if (jobs.length === 0) {
-        await createSampleData(user.id);
+  // Apply security middleware
+  app.use(securityHeaders());
+  app.use(globalRateLimit);
+  
+  // Auth routes with rate limiting
+  app.post("/api/auth/register", authRateLimit, async (req, res) => {
+    try {
+      const validatedData = insertUserSchema.parse(req.body);
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByUsername(validatedData.username);
+      if (existingUser) {
+        return res.status(400).json({ error: "Username already exists" });
       }
+      
+      const existingEmail = await storage.getUserByEmail(validatedData.email);
+      if (existingEmail) {
+        return res.status(400).json({ error: "Email already exists" });
+      }
+      
+      // Hash password and create user
+      const hashedPassword = await hashPassword(validatedData.password);
+      const user = await storage.createUser({
+        ...validatedData,
+        password: hashedPassword,
+      });
+      
+      // Generate tokens
+      const accessToken = generateAccessToken(user);
+      const refreshToken = generateRefreshToken(user);
+      
+      // Store refresh token
+      await storage.createSession({
+        userId: user.id,
+        refreshToken,
+        expiresAt: getRefreshTokenExpiry(),
+      });
+      
+      // Update last login
+      await storage.updateUserLastLogin(user.id);
+      
+      res.json(createAuthResponse(user, accessToken, refreshToken));
+    } catch (error: any) {
+      if (error.issues) {
+        return res.status(400).json({ error: "Validation error", details: error.issues });
+      }
+      console.error("Registration error:", error);
+      res.status(500).json({ error: "Failed to register user" });
     }
-  }, 1000);
-  // Auth routes
-  app.get("/api/auth/status", async (req, res) => {
-    const user = await getDemoUser();
+  });
+  
+  app.post("/api/auth/login", authRateLimit, async (req, res) => {
+    try {
+      const validatedData = loginSchema.parse(req.body);
+      
+      // Find user
+      const user = await storage.getUserByUsername(validatedData.username);
+      if (!user) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      
+      // Verify password
+      const isValidPassword = await verifyPassword(validatedData.password, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+      
+      // Check if user is active
+      if (!user.isActive) {
+        return res.status(401).json({ error: "Account is disabled" });
+      }
+      
+      // Generate tokens
+      const accessToken = generateAccessToken(user);
+      const refreshToken = generateRefreshToken(user);
+      
+      // Store refresh token
+      await storage.createSession({
+        userId: user.id,
+        refreshToken,
+        expiresAt: getRefreshTokenExpiry(),
+      });
+      
+      // Update last login
+      await storage.updateUserLastLogin(user.id);
+      
+      res.json(createAuthResponse(user, accessToken, refreshToken));
+    } catch (error: any) {
+      if (error.issues) {
+        return res.status(400).json({ error: "Validation error", details: error.issues });
+      }
+      console.error("Login error:", error);
+      res.status(500).json({ error: "Failed to login" });
+    }
+  });
+  
+  app.post("/api/auth/refresh", async (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+      
+      if (!refreshToken) {
+        return res.status(401).json({ error: "Refresh token required" });
+      }
+      
+      // Verify refresh token
+      const tokenData = verifyRefreshToken(refreshToken);
+      
+      // Check if session exists
+      const session = await storage.getSessionByRefreshToken(refreshToken);
+      if (!session || session.expiresAt < new Date()) {
+        return res.status(401).json({ error: "Invalid or expired refresh token" });
+      }
+      
+      // Get user
+      const user = await storage.getUser(tokenData.userId);
+      if (!user || !user.isActive) {
+        return res.status(401).json({ error: "User not found or inactive" });
+      }
+      
+      // Generate new access token
+      const accessToken = generateAccessToken(user);
+      
+      res.json({ accessToken });
+    } catch (error) {
+      console.error("Token refresh error:", error);
+      res.status(401).json({ error: "Invalid refresh token" });
+    }
+  });
+  
+  app.post("/api/auth/logout", authenticateToken, async (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+      
+      if (refreshToken) {
+        await storage.deleteSession(refreshToken);
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Logout error:", error);
+      res.status(500).json({ error: "Failed to logout" });
+    }
+  });
+  
+  app.get("/api/auth/status", authenticateToken, async (req, res) => {
+    const user = await storage.getUser(req.user!.userId);
+    
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
     
     res.json({
       isAuthenticated: true,
       user: {
+        id: user.id,
         username: user.username,
+        email: user.email,
         linkedinConnected: !!user.linkedinAccessToken,
       },
     });
   });
 
-  app.get("/api/auth/status-detailed", async (req, res) => {
-    const user = await getDemoUser();
+  app.get("/api/auth/status-detailed", authenticateToken, async (req, res) => {
+    const user = await storage.getUser(req.user!.userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
     const apiStats = await storage.getApiStats(user.id);
     
     res.json({
@@ -152,10 +298,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.post("/api/auth/linkedin", async (req, res) => {
+  app.post("/api/auth/linkedin", authenticateToken, async (req, res) => {
     try {
       // For demo purposes, simulate successful LinkedIn connection
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       const mockTokenExpiry = new Date(Date.now() + 3600 * 1000); // 1 hour from now
       
       await storage.updateUserLinkedInTokens(
@@ -191,7 +340,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const tokens = await linkedInService.exchangeCodeForTokens(code as string);
-      const user = await getDemoUser();
+      // Note: This callback needs special handling - it's called by LinkedIn
+      // For now, we'll return an error since we can't authenticate from a callback
+      return res.status(400).json({ error: "LinkedIn callback authentication not implemented" });
       
       await storage.updateUserLinkedInTokens(
         user.id, 
@@ -207,7 +358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // File upload routes
-  app.post("/api/files/upload", upload.single('file'), async (req, res) => {
+  app.post("/api/files/upload", authenticateToken, uploadRateLimit, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
@@ -241,7 +392,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create a job for this upload
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       const job = await storage.createJob({
         userId: user.id,
         fileName: req.file.originalname || 'uploaded_file.xlsx',
@@ -272,10 +426,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/files/uploaded", async (req, res) => {
+  app.get("/api/files/uploaded", authenticateToken, async (req, res) => {
     // Return any recently uploaded files from jobs
     try {
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       const jobs = await storage.getJobsByUser(user.id);
       const uploadedFiles = jobs
         .filter(job => job.status === 'pending' || job.status === 'processing')
@@ -304,10 +461,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Job management routes
-  app.post("/api/jobs/start", async (req, res) => {
+  app.post("/api/jobs/start", authenticateToken, validateOrigin, async (req, res) => {
     try {
       const { fileId, batchSize } = req.body;
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
 
       // Get the job by ID
       const job = await storage.getJob(parseInt(fileId));
@@ -337,9 +497,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/jobs/current-status", async (req, res) => {
+  app.get("/api/jobs/current-status", authenticateToken, async (req, res) => {
     try {
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       const activeJob = await storage.getActiveJob(user.id);
       
       if (!activeJob) {
@@ -375,9 +538,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/jobs/recent", async (req, res) => {
+  app.get("/api/jobs/recent", authenticateToken, async (req, res) => {
     try {
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       const jobs = await storage.getJobsByUser(user.id);
       
       const recentJobs = jobs.slice(0, 10).map(job => ({
@@ -473,9 +639,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Storage routes
-  app.get("/api/storage/stats", async (req, res) => {
+  app.get("/api/storage/stats", authenticateToken, async (req, res) => {
     try {
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       const jobs = await storage.getJobsByUser(user.id);
       const stats = await storage.getJobStats(user.id);
       
@@ -491,9 +660,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/jobs", async (req, res) => {
+  app.get("/api/jobs", authenticateToken, async (req, res) => {
     try {
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const search = req.query.search as string || "";
@@ -534,10 +706,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // System Health endpoint
-  app.get("/api/system/health", async (req, res) => {
+  app.get("/api/system/health", authenticateToken, async (req, res) => {
     try {
       const startTime = Date.now();
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       const apiStats = await storage.getApiStats(user.id);
       const responseTime = Date.now() - startTime;
       
@@ -561,9 +736,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Statistics routes
-  app.get("/api/stats/overview", async (req, res) => {
+  app.get("/api/stats/overview", authenticateToken, async (req, res) => {
     try {
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       const stats = await storage.getJobStats(user.id);
       res.json(stats);
     } catch (error) {
@@ -571,9 +749,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/stats/errors", async (req, res) => {
+  app.get("/api/stats/errors", authenticateToken, async (req, res) => {
     try {
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       const errorBreakdown = await storage.getErrorBreakdown(user.id);
       res.json(errorBreakdown);
     } catch (error) {
@@ -581,9 +762,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/stats/export-counts", async (req, res) => {
+  app.get("/api/stats/export-counts", authenticateToken, async (req, res) => {
     try {
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       const stats = await storage.getJobStats(user.id);
       res.json({
         successful: stats.successfulProfiles,
@@ -596,10 +780,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // AI Assistant routes
-  app.post("/api/ai/analyze-profile/:profileId", async (req, res) => {
+  app.post("/api/ai/analyze-profile/:profileId", authenticateToken, async (req, res) => {
     try {
       const profileId = parseInt(req.params.profileId);
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       
       const profiles = await storage.getProfilesByJob(profileId);
       const profile = profiles.find(p => p.id === profileId);

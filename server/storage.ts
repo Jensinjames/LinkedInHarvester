@@ -1,10 +1,11 @@
 import { 
-  users, jobs, profiles, apiStats, aiAnalyses,
+  users, jobs, profiles, apiStats, aiAnalyses, sessions,
   type User, type InsertUser,
   type Job, type InsertJob,
   type Profile, type InsertProfile,
   type ApiStats, type InsertApiStats,
-  type AiAnalysis, type InsertAiAnalysis
+  type AiAnalysis, type InsertAiAnalysis,
+  type Session, type InsertSession
 } from "@shared/schema";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
@@ -13,8 +14,16 @@ export interface IStorage {
   // User operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserLinkedInTokens(userId: number, accessToken: string, refreshToken: string, expiry: Date): Promise<void>;
+  updateUserLastLogin(userId: number): Promise<void>;
+  
+  // Session operations
+  createSession(session: InsertSession): Promise<Session>;
+  getSessionByRefreshToken(refreshToken: string): Promise<Session | undefined>;
+  deleteSession(refreshToken: string): Promise<void>;
+  deleteUserSessions(userId: number): Promise<void>;
 
   // Job operations
   createJob(job: InsertJob): Promise<Job>;
@@ -58,20 +67,24 @@ export class MemStorage implements IStorage {
   private jobs: Map<number, Job>;
   private profiles: Map<number, Profile>;
   private apiStats: Map<number, ApiStats>;
+  private sessions: Map<string, Session>;
   private currentUserId: number;
   private currentJobId: number;
   private currentProfileId: number;
   private currentApiStatsId: number;
+  private currentSessionId: number;
 
   constructor() {
     this.users = new Map();
     this.jobs = new Map();
     this.profiles = new Map();
     this.apiStats = new Map();
+    this.sessions = new Map();
     this.currentUserId = 1;
     this.currentJobId = 1;
     this.currentProfileId = 1;
     this.currentApiStatsId = 1;
+    this.currentSessionId = 1;
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -89,10 +102,13 @@ export class MemStorage implements IStorage {
     const user: User = { 
       ...insertUser, 
       id,
+      isActive: true,
+      lastLogin: null,
       linkedinAccessToken: null,
       linkedinRefreshToken: null,
       linkedinTokenExpiry: null,
       createdAt: new Date(),
+      updatedAt: new Date(),
     };
     this.users.set(id, user);
     return user;
@@ -106,6 +122,50 @@ export class MemStorage implements IStorage {
       user.linkedinTokenExpiry = expiry;
       this.users.set(userId, user);
     }
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.email === email,
+    );
+  }
+
+  async updateUserLastLogin(userId: number): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      user.lastLogin = new Date();
+      user.updatedAt = new Date();
+      this.users.set(userId, user);
+    }
+  }
+
+  async createSession(insertSession: InsertSession): Promise<Session> {
+    const id = this.currentSessionId++;
+    const session: Session = {
+      ...insertSession,
+      id,
+      createdAt: new Date(),
+    };
+    this.sessions.set(insertSession.refreshToken, session);
+    return session;
+  }
+
+  async getSessionByRefreshToken(refreshToken: string): Promise<Session | undefined> {
+    return this.sessions.get(refreshToken);
+  }
+
+  async deleteSession(refreshToken: string): Promise<void> {
+    this.sessions.delete(refreshToken);
+  }
+
+  async deleteUserSessions(userId: number): Promise<void> {
+    const tokensToDelete: string[] = [];
+    this.sessions.forEach((session, token) => {
+      if (session.userId === userId) {
+        tokensToDelete.push(token);
+      }
+    });
+    tokensToDelete.forEach(token => this.sessions.delete(token));
   }
 
   async createJob(insertJob: InsertJob): Promise<Job> {
@@ -311,6 +371,42 @@ export class DatabaseStorage implements IStorage {
         linkedinTokenExpiry: expiry,
       })
       .where(eq(users.id, userId));
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async updateUserLastLogin(userId: number): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        lastLogin: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+  }
+
+  async createSession(insertSession: InsertSession): Promise<Session> {
+    const [session] = await db
+      .insert(sessions)
+      .values(insertSession)
+      .returning();
+    return session;
+  }
+
+  async getSessionByRefreshToken(refreshToken: string): Promise<Session | undefined> {
+    const [session] = await db.select().from(sessions).where(eq(sessions.refreshToken, refreshToken));
+    return session || undefined;
+  }
+
+  async deleteSession(refreshToken: string): Promise<void> {
+    await db.delete(sessions).where(eq(sessions.refreshToken, refreshToken));
+  }
+
+  async deleteUserSessions(userId: number): Promise<void> {
+    await db.delete(sessions).where(eq(sessions.userId, userId));
   }
 
   async createJob(insertJob: InsertJob): Promise<Job> {

@@ -5,11 +5,15 @@ import { z } from "zod";
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(), // Will store bcrypt hashed passwords
+  isActive: boolean("is_active").default(true),
+  lastLogin: timestamp("last_login"),
   linkedinAccessToken: text("linkedin_access_token"),
   linkedinRefreshToken: text("linkedin_refresh_token"),
   linkedinTokenExpiry: timestamp("linkedin_token_expiry"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const jobs = pgTable("jobs", {
@@ -55,6 +59,15 @@ export const apiStats = pgTable("api_stats", {
   lastUpdated: timestamp("last_updated").defaultNow(),
 });
 
+// Session management for JWT refresh tokens
+export const sessions = pgTable("sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  refreshToken: text("refresh_token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const aiAnalyses = pgTable("ai_analyses", {
   id: serial("id").primaryKey(),
   jobId: integer("job_id").notNull(),
@@ -64,9 +77,26 @@ export const aiAnalyses = pgTable("ai_analyses", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// User schemas with validation
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
+  email: true,
   password: true,
+}).extend({
+  username: z.string().min(3).max(50).regex(/^[a-zA-Z0-9_-]+$/, "Username can only contain letters, numbers, underscores, and hyphens"),
+  email: z.string().email(),
+  password: z.string().min(8).max(100).regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, "Password must contain at least one uppercase letter, one lowercase letter, and one number"),
+});
+
+export const loginSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
+
+export const insertSessionSchema = createInsertSchema(sessions).pick({
+  userId: true,
+  refreshToken: true,
+  expiresAt: true,
 });
 
 export const insertJobSchema = createInsertSchema(jobs).pick({
@@ -111,6 +141,9 @@ export type InsertApiStats = z.infer<typeof insertApiStatsSchema>;
 
 export type AiAnalysis = typeof aiAnalyses.$inferSelect;
 export type InsertAiAnalysis = z.infer<typeof insertAiAnalysisSchema>;
+
+export type Session = typeof sessions.$inferSelect;
+export type InsertSession = z.infer<typeof insertSessionSchema>;
 
 // Shared interfaces
 export interface LinkedInUrl {
