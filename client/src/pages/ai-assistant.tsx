@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { toast } from "@/hooks/use-toast";
+import { type Job, type Profile } from "@shared/schema";
 import { 
   Bot, 
   Brain, 
@@ -54,12 +55,12 @@ export default function AIAssistant() {
   const [chatHistory, setChatHistory] = useState<Array<{ role: 'user' | 'assistant'; message: string }>>([]);
 
   // Fetch recent jobs for analysis
-  const { data: jobs = [] } = useQuery({
+  const { data: jobs = [] } = useQuery<Job[]>({
     queryKey: ["/api/jobs/recent"],
   });
 
   // Fetch job profiles when job is selected
-  const { data: jobProfiles = [] } = useQuery({
+  const { data: jobProfiles = [] } = useQuery<Profile[]>({
     queryKey: ["/api/profiles", selectedJobId],
     queryFn: async () => {
       if (!selectedJobId) return [];
@@ -168,8 +169,8 @@ export default function AIAssistant() {
     recruitingInsightsMutation.mutate({ jobId: selectedJobId, jobTitle });
   };
 
-  const selectedJob = jobs.find((job: any) => job.id.toString() === selectedJobId);
-  const successfulProfiles = jobProfiles.filter((p: any) => p.status === 'success');
+  const selectedJob = jobs.find((job) => job.id.toString() === selectedJobId);
+  const successfulProfiles = jobProfiles.filter((p) => p.status === 'success');
 
   return (
     <div className="space-y-6">
@@ -204,8 +205,8 @@ export default function AIAssistant() {
                 </SelectTrigger>
                 <SelectContent>
                   {jobs
-                    .filter((job: any) => job.status === 'completed')
-                    .map((job: any) => (
+                    .filter((job) => job.status === 'completed')
+                    .map((job) => (
                       <SelectItem key={job.id} value={job.id.toString()}>
                         {job.fileName} ({job.successfulProfiles} profiles)
                       </SelectItem>
@@ -240,7 +241,7 @@ export default function AIAssistant() {
                 <div>
                   <div className="font-medium text-gray-900 dark:text-white">Success Rate</div>
                   <div className="text-2xl font-bold text-purple-600">
-                    {Math.round((selectedJob.successfulProfiles / selectedJob.totalProfiles) * 100)}%
+                    {Math.round(((selectedJob.successfulProfiles || 0) / selectedJob.totalProfiles) * 100)}%
                   </div>
                 </div>
                 <div>
@@ -314,7 +315,7 @@ export default function AIAssistant() {
                         {Object.entries(analyzeJobMutation.data.industryBreakdown).map(([industry, count]) => (
                           <div key={industry} className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
                             <div className="font-medium">{industry}</div>
-                            <div className="text-sm text-gray-600">{count} profiles</div>
+                            <div className="text-sm text-gray-600">{count as number} profiles</div>
                           </div>
                         ))}
                       </div>
@@ -327,7 +328,7 @@ export default function AIAssistant() {
                         {Object.entries(analyzeJobMutation.data.experienceDistribution).map(([level, count]) => (
                           <div key={level} className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
                             <div className="font-medium">{level}</div>
-                            <div className="text-sm text-gray-600">{count} profiles</div>
+                            <div className="text-sm text-gray-600">{count as number} profiles</div>
                           </div>
                         ))}
                       </div>
