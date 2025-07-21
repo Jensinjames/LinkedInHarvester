@@ -62,15 +62,17 @@ export default function AIAssistant() {
   });
 
   // Fetch job profiles when job is selected
-  const { data: jobProfiles = [] } = useQuery<Profile[]>({
+  const { data: jobProfilesData } = useQuery<{ profiles: Profile[] }>({
     queryKey: ["/api/profiles", selectedJobId],
     queryFn: async () => {
-      if (!selectedJobId) return [];
+      if (!selectedJobId) return { profiles: [] };
       const response = await apiRequest("GET", `/api/jobs/${selectedJobId}/profiles`);
       return response.json();
     },
     enabled: !!selectedJobId,
   });
+  
+  const jobProfiles = jobProfilesData?.profiles || [];
 
   // AI Analysis mutations
   const analyzeJobMutation = useMutation({
