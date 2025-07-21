@@ -10,7 +10,7 @@ export class JobSimulator {
   private readonly config: SimulationConfig = {
     minDelay: 1000,
     maxDelay: 3000,
-    successRate: 0.8
+    successRate: 0.95 // Increased to 95% for more realistic success rate
   };
 
   async simulateJobProcessing(jobId: number): Promise<void> {

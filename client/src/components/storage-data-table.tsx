@@ -14,8 +14,10 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
-  RefreshCw
+  RefreshCw,
+  Eye
 } from "lucide-react";
+import ProfileModal from "./profile-modal";
 
 interface StorageStats {
   totalJobs: number;
@@ -29,6 +31,8 @@ export default function StorageDataTable() {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedJobId, setSelectedJobId] = useState<string>("");
+  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const itemsPerPage = 10;
 
   // Fetch storage statistics
@@ -96,7 +100,8 @@ export default function StorageDataTable() {
   };
 
   return (
-    <Card className="bg-white shadow-sm border border-gray-200">
+    <>
+      <Card className="bg-white shadow-sm border border-gray-200">
       <CardHeader className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -282,18 +287,19 @@ export default function StorageDataTable() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-neutral-gray uppercase">Name</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-neutral-gray uppercase">Extracted</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-neutral-gray uppercase">Error</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-neutral-gray uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {profilesLoading ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-neutral-gray">
+                      <td colSpan={7} className="px-4 py-8 text-center text-neutral-gray">
                         Loading profiles...
                       </td>
                     </tr>
                   ) : profilesData?.profiles.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-neutral-gray">
+                      <td colSpan={7} className="px-4 py-8 text-center text-neutral-gray">
                         No profiles found
                       </td>
                     </tr>
@@ -324,6 +330,20 @@ export default function StorageDataTable() {
                           <td className="px-4 py-3 text-xs text-error-red">
                             {profile.errorType || "None"}
                           </td>
+                          <td className="px-4 py-3">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedProfile(profile);
+                                setProfileModalOpen(true);
+                              }}
+                              className="text-azure-blue hover:bg-azure-blue hover:text-white"
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              View
+                            </Button>
+                          </td>
                         </tr>
                       );
                     })
@@ -335,5 +355,22 @@ export default function StorageDataTable() {
         </Tabs>
       </CardContent>
     </Card>
+    
+    {/* Profile Modal */}
+    <ProfileModal 
+      open={profileModalOpen}
+      onClose={() => {
+        setProfileModalOpen(false);
+        setSelectedProfile(null);
+      }}
+      profile={selectedProfile ? {
+        linkedinUrl: selectedProfile.linkedinUrl,
+        status: selectedProfile.status,
+        profileData: selectedProfile.profileData as any,
+        errorType: selectedProfile.errorType || undefined,
+        errorMessage: selectedProfile.errorMessage || undefined
+      } : null}
+    />
+    </>
   );
 }

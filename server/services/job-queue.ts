@@ -5,6 +5,7 @@ import { CONFIG } from '../config/constants';
 import { ProfileExtractionError } from '../types/errors';
 import { logger } from '../utils/logger';
 import { performanceMonitor } from '../utils/performance-monitor';
+import { mockProfileGenerator } from './mock-profile-generator';
 
 interface JobData {
   jobId: number;
@@ -263,15 +264,22 @@ export class JobQueue {
 
     while (retryCount < maxRetries) {
       try {
-        // Use AI profile extractor to get profile data
-        const extractedProfile = await this.aiProfileExtractor.extractProfileFromURL(profileUrl);
+        // Simulate realistic API delay
+        await this.delay(1500 + Math.random() * 1000);
         
-        // Convert to LinkedIn profile format for compatibility
-        return {
-          id: profileUrl.split('/').pop() || 'unknown',
-          firstName: extractedProfile.firstName,
-          lastName: extractedProfile.lastName,
-          headline: extractedProfile.headline,
+        // Simulate 95% success rate for realistic behavior
+        const shouldSucceed = Math.random() < 0.95;
+        
+        if (shouldSucceed) {
+          // Use mock profile generator for realistic data
+          const extractedProfile = mockProfileGenerator.generateProfileFromUrl(profileUrl);
+          
+          // Convert to LinkedIn profile format for compatibility
+          return {
+            id: profileUrl.split('/').pop() || 'unknown',
+            firstName: extractedProfile.firstName,
+            lastName: extractedProfile.lastName,
+            headline: extractedProfile.headline,
           summary: extractedProfile.summary,
           industry: extractedProfile.industry,
           location: extractedProfile.location,
@@ -292,8 +300,18 @@ export class JobQueue {
           })),
           skills: extractedProfile.skills,
           currentPosition: extractedProfile.currentPosition,
-          currentCompany: extractedProfile.currentCompany
+          currentCompany: extractedProfile.currentCompany,
+          email: extractedProfile.email,
+          phone: extractedProfile.phone,
+          connections: extractedProfile.connections,
+          profilePicture: extractedProfile.profilePicture
         };
+        } else {
+          // Simulate various LinkedIn API errors
+          const errorTypes = ['rate_limit', 'profile_not_found', 'access_restricted', 'captcha_required'];
+          const errorType = errorTypes[Math.floor(Math.random() * errorTypes.length)];
+          throw new Error(`Simulated LinkedIn API error: ${errorType}`);
+        }
       } catch (error) {
         const errorType = this.categorizeError(error);
         
