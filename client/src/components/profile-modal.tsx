@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -71,6 +71,9 @@ export default function ProfileModal({ open, onClose, profile }: ProfileModalPro
           <DialogTitle className="text-xl font-semibold">
             LinkedIn Profile Details
           </DialogTitle>
+          <DialogDescription className="text-sm text-neutral-gray">
+            View extracted profile information and data
+          </DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="h-[calc(85vh-100px)] pr-4">
