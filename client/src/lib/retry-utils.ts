@@ -1,149 +1,207 @@
-/**
- * Retry utilities for API calls with exponential backoff
- */
+// Enhanced error handling and retry utilities
 
-export interface RetryOptions {
-  maxRetries?: number;
-  initialDelay?: number;
-  maxDelay?: number;
-  backoffFactor?: number;
-  shouldRetry?: (error: any, attemptNumber: number) => boolean;
-  onRetryAttempt?: (error: any, attemptNumber: number) => void;
-}
-
-const DEFAULT_RETRY_OPTIONS: Required<RetryOptions> = {
-  maxRetries: 3,
-  initialDelay: 1000,
-  maxDelay: 10000,
-  backoffFactor: 2,
-  shouldRetry: (error: any) => {
-    // Don't retry on authentication errors
-    if (error?.status === 401 || error?.status === 403) {
-      return false;
-    }
-    // Retry on network errors or 5xx server errors
-    if (!error?.status || error.status >= 500) {
-      return true;
-    }
-    // Retry on rate limit errors
-    if (error?.status === 429) {
-      return true;
-    }
-    return false;
-  },
-  onRetryAttempt: () => {},
-};
-
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  options: RetryOptions = {}
-): Promise<T> {
-  const opts = { ...DEFAULT_RETRY_OPTIONS, ...options };
-  let lastError: any;
-
-  for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-
-      // Check if we should retry
-      if (attempt === opts.maxRetries || !opts.shouldRetry(error, attempt + 1)) {
-        throw error;
-      }
-
-      // Calculate delay with exponential backoff
-      const delay = Math.min(
-        opts.initialDelay * Math.pow(opts.backoffFactor, attempt),
-        opts.maxDelay
-      );
-
-      // Call retry callback
-      opts.onRetryAttempt(error, attempt + 1);
-
-      // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-
-  throw lastError;
-}
-
-export function createRetryHandler(defaultOptions: RetryOptions = {}) {
-  return <T>(fn: () => Promise<T>, overrideOptions: RetryOptions = {}) => {
-    return withRetry(fn, { ...defaultOptions, ...overrideOptions });
-  };
-}
-
-/**
- * Parse error to extract meaningful information
- */
-export function parseError(error: any): {
-  message: string;
-  status?: number;
-  isNetworkError: boolean;
-  isAuthError: boolean;
-  isServerError: boolean;
-  isRateLimitError: boolean;
-} {
-  const isNetworkError = !error?.status && error?.message?.includes('fetch');
-  const status = error?.status || error?.response?.status;
-  
-  return {
-    message: error?.message || 'An unexpected error occurred',
-    status,
-    isNetworkError,
-    isAuthError: status === 401 || status === 403,
-    isServerError: status >= 500 && status < 600,
-    isRateLimitError: status === 429,
-  };
-}
-
-/**
- * Get user-friendly error message
- */
-export function getUserFriendlyErrorMessage(error: any): {
+export interface ErrorInfo {
   title: string;
   description: string;
   action?: string;
-} {
-  const parsed = parseError(error);
+  type: 'network' | 'auth' | 'validation' | 'server' | 'unknown';
+  retryable: boolean;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+}
 
-  if (parsed.isNetworkError) {
+// Map common errors to user-friendly messages
+export function getUserFriendlyErrorMessage(error: Error): ErrorInfo {
+  const message = error.message?.toLowerCase() || '';
+  
+  // Network errors
+  if (message.includes('network') || message.includes('fetch') || message.includes('connection')) {
     return {
-      title: 'Connection Error',
-      description: 'Unable to connect to the server. Please check your internet connection.',
-      action: 'Try refreshing the page or check your connection.',
+      title: 'Connection Problem',
+      description: 'Unable to connect to our servers. Please check your internet connection.',
+      action: 'Try again in a moment or refresh the page.',
+      type: 'network',
+      retryable: true,
+      priority: 'high'
     };
   }
-
-  if (parsed.isAuthError) {
+  
+  // Authentication errors
+  if (message.includes('401') || message.includes('unauthorized') || message.includes('token')) {
     return {
       title: 'Authentication Required',
-      description: 'Your session has expired. Please log in again.',
-      action: 'Click here to go to the login page.',
+      description: 'Your session has expired or you\'re not logged in.',
+      action: 'Please log in again to continue.',
+      type: 'auth',
+      retryable: false,
+      priority: 'critical'
     };
   }
-
-  if (parsed.isRateLimitError) {
+  
+  // Validation errors
+  if (message.includes('validation') || message.includes('invalid') || message.includes('400')) {
     return {
-      title: 'Too Many Requests',
-      description: 'You\'ve made too many requests. Please wait a moment before trying again.',
-      action: 'Wait a few minutes and try again.',
+      title: 'Invalid Input',
+      description: 'There was a problem with the information provided.',
+      action: 'Please check your input and try again.',
+      type: 'validation',
+      retryable: true,
+      priority: 'medium'
     };
   }
-
-  if (parsed.isServerError) {
+  
+  // Server errors
+  if (message.includes('500') || message.includes('server') || message.includes('internal')) {
     return {
       title: 'Server Error',
-      description: 'Our servers are experiencing issues. We\'re working to fix this.',
-      action: 'Please try again in a few minutes.',
+      description: 'Something went wrong on our end. Our team has been notified.',
+      action: 'Please try again later or contact support if the problem persists.',
+      type: 'server',
+      retryable: true,
+      priority: 'high'
     };
   }
-
+  
+  // Rate limiting
+  if (message.includes('429') || message.includes('rate limit') || message.includes('too many')) {
+    return {
+      title: 'Too Many Requests',
+      description: 'You\'ve made too many requests. Please slow down.',
+      action: 'Wait a moment before trying again.',
+      type: 'server',
+      retryable: true,
+      priority: 'medium'
+    };
+  }
+  
+  // File upload errors
+  if (message.includes('file') || message.includes('upload') || message.includes('size')) {
+    return {
+      title: 'File Upload Problem',
+      description: 'There was an issue uploading your file.',
+      action: 'Check the file size and format, then try again.',
+      type: 'validation',
+      retryable: true,
+      priority: 'medium'
+    };
+  }
+  
+  // Default fallback
   return {
-    title: 'Something Went Wrong',
-    description: parsed.message || 'An unexpected error occurred.',
-    action: 'Please try again or contact support if the issue persists.',
+    title: 'Unexpected Error',
+    description: 'Something unexpected happened. We apologize for the inconvenience.',
+    action: 'Try refreshing the page or contact support if the problem continues.',
+    type: 'unknown',
+    retryable: true,
+    priority: 'medium'
+  };
+}
+
+// Retry function with exponential backoff
+export async function retryWithBackoff<T>(
+  operation: () => Promise<T>,
+  options: {
+    maxRetries?: number;
+    baseDelay?: number;
+    maxDelay?: number;
+    onRetry?: (attempt: number, error: Error) => void;
+  } = {}
+): Promise<T> {
+  const {
+    maxRetries = 3,
+    baseDelay = 1000,
+    maxDelay = 10000,
+    onRetry
+  } = options;
+  
+  let lastError: Error;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error as Error;
+      
+      // Don't retry on the last attempt
+      if (attempt === maxRetries) {
+        break;
+      }
+      
+      // Don't retry non-retryable errors
+      const errorInfo = getUserFriendlyErrorMessage(lastError);
+      if (!errorInfo.retryable) {
+        break;
+      }
+      
+      // Call retry callback
+      onRetry?.(attempt + 1, lastError);
+      
+      // Calculate delay with exponential backoff and jitter
+      const delay = Math.min(
+        baseDelay * Math.pow(2, attempt) + Math.random() * 1000,
+        maxDelay
+      );
+      
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
+// Debounce function for search and input
+export function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number,
+  immediate?: boolean
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout | undefined;
+  
+  return function executedFunction(...args: Parameters<T>) {
+    const later = () => {
+      timeout = undefined;
+      if (!immediate) func(...args);
+    };
+    
+    const callNow = immediate && !timeout;
+    
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+    
+    if (callNow) func(...args);
+  };
+}
+
+// Throttle function for scroll and resize events
+export function throttle<T extends (...args: any[]) => any>(
+  func: T,
+  limit: number
+): (...args: Parameters<T>) => void {
+  let inThrottle: boolean;
+  
+  return function(...args: Parameters<T>) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
+}
+
+// Check if error is recoverable
+export function isRecoverableError(error: Error): boolean {
+  const errorInfo = getUserFriendlyErrorMessage(error);
+  return errorInfo.retryable && errorInfo.type !== 'auth';
+}
+
+// Format error for logging
+export function formatErrorForLogging(error: Error, context?: Record<string, any>) {
+  return {
+    message: error.message,
+    stack: error.stack,
+    name: error.name,
+    timestamp: new Date().toISOString(),
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+    url: typeof window !== 'undefined' ? window.location.href : undefined,
+    context,
   };
 }
