@@ -129,8 +129,8 @@ export const globalRateLimit = rateLimit({
     if (req.user) {
       return `user:${req.user.userId}`;
     }
-    // Use proper IPv6-safe IP handling
-    return req.ip || req.connection.remoteAddress || 'anonymous';
+    // Use req.ip which is handled by express and rate limiter correctly
+    return req.ip;
   },
 });
 
