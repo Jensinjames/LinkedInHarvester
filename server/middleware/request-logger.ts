@@ -6,7 +6,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
   const { method, path, query, body } = req;
 
   // Log request start
-  logger.debug(`${method} ${path}`, {
+  logger.debug("%s %s", method, path, {
     query,
     body: method !== 'GET' ? body : undefined,
     userId: (req as any).user?.id,
@@ -18,7 +18,7 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
     const duration = Date.now() - start;
     
     // Log response
-    logger.info(`${method} ${path} ${res.statusCode} in ${duration}ms`, {
+    logger.info("%s %s %d in %dms", method, path, res.statusCode, duration, {
       statusCode: res.statusCode,
       duration,
       userId: (req as any).user?.id,
