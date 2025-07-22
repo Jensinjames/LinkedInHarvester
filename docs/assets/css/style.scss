@@ -1,0 +1,125 @@
+---
+---
+
+@import "{{ site.theme }}";
+
+/* Custom styles for LinkedIn Harvester documentation */
+
+/* Override default theme colors to match the application */
+:root {
+  --primary-color: #0078d4;
+  --secondary-color: #106ebe;
+  --accent-color: #005a9e;
+  --text-color: #323130;
+  --background-color: #ffffff;
+  --border-color: #edebe9;
+}
+
+/* Header styling */
+.site-header {
+  background-color: var(--primary-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.site-title {
+  color: white !important;
+  font-weight: 600;
+}
+
+.site-nav .page-link {
+  color: white;
+  
+  &:hover {
+    color: #f0f0f0;
+  }
+}
+
+/* Main content area */
+.page-content {
+  background-color: var(--background-color);
+  color: var(--text-color);
+}
+
+/* Code blocks */
+pre, code {
+  background-color: #f8f9fa;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+pre {
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+code {
+  padding: 0.2rem 0.4rem;
+  font-size: 0.9em;
+}
+
+/* Links */
+a {
+  color: var(--primary-color);
+  
+  &:hover {
+    color: var(--secondary-color);
+    text-decoration: underline;
+  }
+}
+
+/* Buttons */
+.btn {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  text-decoration: none;
+  display: inline-block;
+  
+  &:hover {
+    background-color: var(--secondary-color);
+    color: white;
+    text-decoration: none;
+  }
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+}
+
+th, td {
+  border: 1px solid var(--border-color);
+  padding: 0.5rem;
+  text-align: left;
+}
+
+th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .site-header {
+    padding: 0.5rem;
+  }
+  
+  .page-content {
+    padding: 1rem;
+  }
+}
+
+/* Footer */
+.site-footer {
+  background-color: #f8f9fa;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-color);
+  
+  a {
+    color: var(--primary-color);
+  }
+}

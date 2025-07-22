@@ -1,0 +1,52 @@
+title: LinkedIn Harvester
+description: A professional LinkedIn API integration tool for extracting profile data through official APIs
+baseurl: ""
+url: "https://jensinjames.github.io/LinkedInHarvester"
+
+# Build settings
+markdown: kramdown
+highlighter: rouge
+theme: minima
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+
+# Exclude from processing
+exclude:
+  - node_modules
+  - package.json
+  - package-lock.json
+  - client
+  - server
+  - shared
+  - uploads
+  - results
+  - .git
+  - .gitignore
+  - vite.config.ts
+  - tsconfig.json
+  - tailwind.config.ts
+  - postcss.config.js
+  - drizzle.config.ts
+  - components.json
+
+# Collections
+collections:
+  docs:
+    output: true
+    permalink: /:collection/:name/
+
+# Default layouts
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"
+  - scope:
+      path: ""
+      type: "docs"
+    values:
+      layout: "default"
