@@ -154,8 +154,9 @@ export interface LinkedInUrl {
 
 export interface ProcessedProfile {
   url: string;
-  status: 'success' | 'failed';
+  status: 'success' | 'failed' | 'retrying';
   data?: any;
   error?: string;
   errorType?: string;
+  retryCount?: number;
 }

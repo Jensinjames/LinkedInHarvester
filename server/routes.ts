@@ -404,13 +404,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         filePath: req.file.path,
       });
 
-      // Create profile records
+      // Create profile records with deduplication
       for (const urlData of linkedinUrls) {
-        await storage.createProfile({
-          jobId: job.id,
-          linkedinUrl: urlData.url,
-          status: 'pending',
-        });
+        // Check if profile already exists for this job and URL
+        const existingProfiles = await storage.getProfilesByJob(job.id);
+        const exists = existingProfiles.some(p => p.linkedinUrl === urlData.url);
+        
+        if (!exists) {
+          await storage.createProfile({
+            jobId: job.id,
+            linkedinUrl: urlData.url,
+            status: 'pending',
+          });
+        }
       }
       
       res.json({
@@ -835,10 +841,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ai/analyze-job/:jobId", async (req, res) => {
+  app.post("/api/ai/analyze-job/:jobId", authenticateToken, async (req, res) => {
     try {
       const jobId = parseInt(req.params.jobId);
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       
       const job = await storage.getJob(jobId);
       if (!job) {
@@ -894,11 +903,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ai/recruiting-insights/:jobId", async (req, res) => {
+  app.post("/api/ai/recruiting-insights/:jobId", authenticateToken, async (req, res) => {
     try {
       const jobId = parseInt(req.params.jobId);
       const { jobTitle } = req.body;
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       
       const job = await storage.getJob(jobId);
       if (!job) {
@@ -954,10 +966,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ai/chat", async (req, res) => {
+  app.post("/api/ai/chat", authenticateToken, async (req, res) => {
     try {
       const { message, jobId } = req.body;
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       
       let context: any = {};
       
@@ -1001,10 +1016,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Export routes
-  app.post("/api/export/:type", async (req, res) => {
+  app.post("/api/export/:type", authenticateToken, async (req, res) => {
     try {
       const { type } = req.params;
-      const user = await getDemoUser();
+      const user = await storage.getUser(req.user!.userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
       
       const excelBuffer = await excelProcessor.exportResults(user.id, type as 'successful' | 'failed' | 'all');
       

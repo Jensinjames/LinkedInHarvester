@@ -161,6 +161,7 @@ export class JobQueue {
               await this.storage.updateProfileStatus(profileRecord.id, 'success', {
                 profileData: profile,
                 extractedAt: new Date(),
+                retryCount: profileRecord.retryCount || 0,
               });
             }
 
@@ -171,10 +172,18 @@ export class JobQueue {
             
             if (profileRecord) {
               const errorType = this.categorizeError(error);
-              await this.storage.updateProfileStatus(profileRecord.id, 'failed', {
+              const retryCount = (profileRecord.retryCount || 0) + 1;
+              
+              // Determine if profile should be retried
+              const shouldRetry = retryCount < 3 && 
+                                errorType !== CONFIG.ERROR_TYPES.NOT_FOUND &&
+                                errorType !== CONFIG.ERROR_TYPES.ACCESS_RESTRICTED;
+              
+              await this.storage.updateProfileStatus(profileRecord.id, shouldRetry ? 'retrying' : 'failed', {
                 errorType,
                 errorMessage: error instanceof Error ? error.message : 'Unknown error',
                 lastAttempt: new Date(),
+                retryCount,
               });
             }
 

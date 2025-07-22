@@ -37,6 +37,8 @@ export class ExcelExporter {
           'Industry': p.profileData?.industry || '',
           'Error Type': p.errorType || '',
           'Error Message': p.errorMessage || '',
+          'Retry Count': p.retryCount || 0,
+          'Last Attempt': p.lastAttempt || '',
           'Extracted At': p.extractedAt || '',
         }))
       );
@@ -95,9 +97,11 @@ export class ExcelExporter {
             row['School'] = profile.data.education[0]?.school || '';
             row['Field of Study'] = profile.data.education[0]?.field || '';
           }
-        } else if (profile.status === 'failed') {
+        } else if (profile.status === 'failed' || profile.status === 'retrying') {
           row['Error Type'] = profile.errorType || 'Unknown';
           row['Error Message'] = profile.error || 'Failed to extract profile';
+          row['Retry Count'] = profile.retryCount || 0;
+          row['Status'] = profile.status;
         }
 
         return row;
