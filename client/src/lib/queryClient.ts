@@ -1,165 +1,135 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { withRetry, parseError } from "./retry-utils";
+import { QueryClient } from "@tanstack/react-query";
 
-async function throwIfResNotOk(res: Response) {
-  if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    const error = new Error(`${res.status}: ${text}`) as any;
-    error.status = res.status;
-    throw error;
-  }
-}
-
-export async function apiRequest(
-  method: string,
-  url: string,
-  data?: unknown | undefined,
-  retryOptions?: { maxRetries?: number; onRetryAttempt?: (error: any, attemptNumber: number) => void }
-): Promise<Response> {
-  return withRetry(async () => {
-    const accessToken = localStorage.getItem("accessToken");
-    const headers: HeadersInit = data ? { "Content-Type": "application/json" } : {};
-    
-    if (accessToken) {
-      headers["Authorization"] = `Bearer ${accessToken}`;
-    }
-    
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: data ? JSON.stringify(data) : undefined,
-      credentials: "include",
-    });
-
-    // Handle 401 errors
-    if (res.status === 401) {
-      const refreshToken = localStorage.getItem("refreshToken");
-      if (refreshToken) {
-        try {
-          const refreshRes = await fetch("/api/auth/refresh", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refreshToken }),
-          });
-          
-          if (refreshRes.ok) {
-            const { accessToken: newAccessToken } = await refreshRes.json();
-            localStorage.setItem("accessToken", newAccessToken);
-            
-            // Retry original request with new token
-            headers["Authorization"] = `Bearer ${newAccessToken}`;
-            const retryRes = await fetch(url, {
-              method,
-              headers,
-              body: data ? JSON.stringify(data) : undefined,
-              credentials: "include",
-            });
-            
-            await throwIfResNotOk(retryRes);
-            return retryRes;
-          }
-        } catch (error) {
-          // Refresh failed
-          localStorage.clear();
-          window.location.href = "/login";
-          throw new Error("Authentication failed");
-        }
-      } else {
-        // No refresh token
-        window.location.href = "/login";
-        throw new Error("Authentication required");
-      }
-    }
-
-    await throwIfResNotOk(res);
-    return res;
-  }, retryOptions);
-}
-
-type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: {
-  on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey, signal }) => {
-    return withRetry(async () => {
-      const accessToken = localStorage.getItem("accessToken");
-      const headers: HeadersInit = {};
-      
-      if (accessToken) {
-        headers["Authorization"] = `Bearer ${accessToken}`;
-      }
-      
-      const res = await fetch(queryKey.join("/") as string, {
-        headers,
-        credentials: "include",
-        signal,
-      });
-
-      if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-        return null;
-      }
-
-      // Handle 401 errors
-      if (res.status === 401 && unauthorizedBehavior === "throw") {
-        const refreshToken = localStorage.getItem("refreshToken");
-        if (refreshToken) {
-          try {
-            const refreshRes = await fetch("/api/auth/refresh", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ refreshToken }),
-            });
-            
-            if (refreshRes.ok) {
-              const { accessToken: newAccessToken } = await refreshRes.json();
-              localStorage.setItem("accessToken", newAccessToken);
-              
-              // Retry original request with new token
-              const retryRes = await fetch(queryKey.join("/") as string, {
-                headers: { "Authorization": `Bearer ${newAccessToken}` },
-                credentials: "include",
-                signal,
-              });
-              
-              await throwIfResNotOk(retryRes);
-              return await retryRes.json();
-            }
-          } catch (error) {
-            // Refresh failed
-            localStorage.clear();
-            window.location.href = "/login";
-            throw new Error("Authentication failed");
-          }
-        } else {
-          // No refresh token
-          window.location.href = "/login";
-          throw new Error("Authentication required");
-        }
-      }
-
-      await throwIfResNotOk(res);
-      return await res.json();
-    }, {
-      onRetryAttempt: (error, attemptNumber) => {
-        console.log(`Retrying request ${queryKey.join("/")} - attempt ${attemptNumber}`);
-      }
-    });
-  };
-
+// Enhanced query client with better caching and error handling
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      queryFn: getQueryFn({ on401: "throw" }),
-      refetchInterval: false,
-      refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: 3, // Enable retry with 3 attempts
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
+      // Cache data for 5 minutes by default
+      staleTime: 5 * 60 * 1000,
+      // Keep in cache for 10 minutes
+      gcTime: 10 * 60 * 1000,
+      // Retry failed requests up to 2 times
+      retry: (failureCount, error: any) => {
+        // Don't retry on authentication errors
+        if (error?.message?.includes('401') || error?.message?.includes('403')) {
+          return false;
+        }
+        // Retry up to 2 times for other errors
+        return failureCount < 2;
+      },
+      // Retry with exponential backoff
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      // Enable background refetching on window focus for fresh data
+      refetchOnWindowFocus: true,
+      // Don't refetch on reconnect by default (can be overridden per query)
+      refetchOnReconnect: false,
     },
     mutations: {
-      retry: 2, // Enable retry for mutations
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+      // Retry mutations once on failure
+      retry: 1,
+      // Show error toast on mutation failure by default
+      onError: (error: any) => {
+        console.error('Mutation error:', error);
+        // Global error handling can be added here
+      },
     },
   },
 });
+
+// Enhanced API request function with better error handling and caching
+export async function apiRequest(
+  method: string,
+  endpoint: string,
+  options: {
+    body?: string;
+    headers?: Record<string, string>;
+    signal?: AbortSignal;
+  } = {}
+): Promise<Response> {
+  const baseUrl = import.meta.env.VITE_API_URL || '';
+  const url = `${baseUrl}${endpoint}`;
+  
+  // Get auth token from localStorage
+  const authData = localStorage.getItem('auth');
+  const token = authData ? JSON.parse(authData).accessToken : null;
+  
+  const config: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+    signal: options.signal,
+  };
+  
+  if (options.body) {
+    config.body = options.body;
+  }
+  
+  try {
+    const response = await fetch(url, config);
+    
+    // Handle different response types
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage = `HTTP ${response.status}`;
+      
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.error || errorJson.message || errorMessage;
+      } catch {
+        errorMessage = errorText || errorMessage;
+      }
+      
+      // Custom error for different status codes
+      if (response.status === 401) {
+        // Handle token expiry - try to refresh or logout
+        const authData = localStorage.getItem('auth');
+        if (authData) {
+          const { refreshToken } = JSON.parse(authData);
+          if (refreshToken) {
+            try {
+              const refreshResponse = await fetch(`${baseUrl}/api/auth/refresh`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken }),
+              });
+              
+              if (refreshResponse.ok) {
+                const newTokens = await refreshResponse.json();
+                const updatedAuth = { ...JSON.parse(authData), ...newTokens };
+                localStorage.setItem('auth', JSON.stringify(updatedAuth));
+                
+                // Retry original request with new token
+                return apiRequest(method, endpoint, options);
+              }
+            } catch (refreshError) {
+              console.error('Token refresh failed:', refreshError);
+            }
+          }
+        }
+        
+        // Clear auth data and redirect to login
+        localStorage.removeItem('auth');
+        window.location.href = '/login';
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    return response;
+  } catch (error) {
+    if (error instanceof Error) {
+      // Enhanced error messages for different scenarios
+      if (error.name === 'AbortError') {
+        throw new Error('Request was cancelled');
+      }
+      if (error.message.includes('Failed to fetch')) {
+        throw new Error('Network error - please check your connection');
+      }
+      throw error;
+    }
+    throw new Error('An unexpected error occurred');
+  }
+}
