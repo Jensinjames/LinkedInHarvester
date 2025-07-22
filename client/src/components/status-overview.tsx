@@ -1,8 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { NetworkError } from "@/components/ui/network-error";
 import { Users, CheckCircle, AlertTriangle, TrendingUp } from "lucide-react";
+import { motion } from "framer-motion";
+import AnimatedCounter from "@/components/ui/animated-counter";
+import LoadingCard from "@/components/ui/loading-card";
+import AsyncBoundary from "@/components/ui/async-boundary";
+import { useErrorRecovery } from "@/hooks/use-error-recovery";
+import { memo } from "react";
 
 interface StatsData {
   totalProfiles: number;
@@ -11,32 +15,128 @@ interface StatsData {
   successRate: string;
 }
 
-export default function StatusOverview() {
+// Memoized stat card component for better performance
+const StatCard = memo(function StatCard({
+  title,
+  value,
+  icon: Icon,
+  bgColor,
+  iconColor,
+  valueColor,
+  index
+}: {
+  title: string;
+  value: number | string;
+  icon: any;
+  bgColor: string;
+  iconColor: string;
+  valueColor?: string;
+  index: number;
+}) {
+  const numericValue = typeof value === 'string' ? 
+    parseInt(value.replace('%', '')) : value;
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ 
+        duration: 0.4,
+        delay: index * 0.1,
+        ease: "easeOut"
+      }}
+      whileHover={{ 
+        scale: 1.02,
+        transition: { duration: 0.2 }
+      }}
+    >
+      <Card className="bg-white shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <motion.p 
+                className="text-sm font-medium text-neutral-gray mb-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: index * 0.1 + 0.2 }}
+              >
+                {title}
+              </motion.p>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: index * 0.1 + 0.3 }}
+                className={`text-3xl font-bold ${valueColor || 'text-text-dark'}`}
+              >
+                {typeof value === 'string' && value.includes('%') ? (
+                  <AnimatedCounter 
+                    value={numericValue} 
+                    suffix="%" 
+                    duration={1000 + index * 200}
+                  />
+                ) : (
+                  <AnimatedCounter 
+                    value={numericValue} 
+                    duration={1000 + index * 200}
+                  />
+                )}
+              </motion.div>
+            </div>
+            
+            <motion.div 
+              className={`w-12 h-12 ${bgColor} rounded-lg flex items-center justify-center`}
+              initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+              animate={{ opacity: 1, rotate: 0, scale: 1 }}
+              transition={{ 
+                delay: index * 0.1 + 0.4,
+                type: "spring",
+                stiffness: 200,
+                damping: 15
+              }}
+              whileHover={{ 
+                rotate: 5,
+                scale: 1.1,
+                transition: { duration: 0.2 }
+              }}
+            >
+              <Icon className={`${iconColor} text-xl`} />
+            </motion.div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+});
+
+function StatusOverviewContent() {
+  const { executeWithRecovery } = useErrorRecovery({
+    maxRetries: 3,
+    showToasts: true
+  });
+  
   const { data: stats, isLoading, error, refetch } = useQuery<StatsData>({
     queryKey: ["/api/stats/overview"],
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    retry: (failureCount, error) => {
+      // Use our enhanced error recovery
+      return executeWithRecovery(async () => {
+        throw error;
+      }, 'statistics overview').catch(() => false);
+    }
   });
 
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {[...Array(4)].map((_, i) => (
-          <Card key={i} className="bg-white shadow-sm border border-gray-200">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <Skeleton className="h-10 w-10 rounded-lg" />
-                <Skeleton className="h-4 w-16" />
-              </div>
-              <Skeleton className="h-8 w-20 mb-2" />
-              <Skeleton className="h-4 w-32" />
-            </CardContent>
-          </Card>
+          <LoadingCard key={i} showHeader={false} rows={2} />
         ))}
       </div>
     );
   }
 
   if (error) {
-    return <NetworkError error={error} onRetry={() => refetch()} className="mb-8" />;
+    throw error; // Let AsyncBoundary handle it
   }
 
   const statsCards = [
@@ -73,32 +173,30 @@ export default function StatusOverview() {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <motion.div 
+      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+    >
       {statsCards.map((card, index) => (
-        <Card key={index} className="bg-white shadow-sm border border-gray-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-neutral-gray">
-                  {card.title}
-                </p>
-                <p 
-                  className={`text-3xl font-bold ${
-                    card.valueColor || 'text-text-dark'
-                  }`}
-                >
-                  {card.value.toLocaleString()}
-                </p>
-              </div>
-              <div 
-                className={`w-12 h-12 ${card.bgColor} rounded-lg flex items-center justify-center`}
-              >
-                <card.icon className={`${card.iconColor} text-xl`} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard
+          key={card.title}
+          {...card}
+          index={index}
+        />
       ))}
-    </div>
+    </motion.div>
+  );
+}
+
+export default function StatusOverview() {
+  return (
+    <AsyncBoundary
+      context="Status Overview"
+      resetKeys={["status-overview"]}
+    >
+      <StatusOverviewContent />
+    </AsyncBoundary>
   );
 }
