@@ -10,7 +10,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2, Eye, EyeOff } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -36,6 +36,8 @@ export default function Login() {
   const [, navigate] = useLocation();
   const { login } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -103,19 +105,33 @@ export default function Login() {
         </CardHeader>
         <CardContent>
           {error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertCircle className="h-4 w-4" />
+            <Alert variant="destructive" className="mb-4" role="alert">
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="register">Register</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2" role="tablist">
+              <TabsTrigger 
+                value="login" 
+                role="tab"
+                aria-selected="true"
+                aria-controls="login-panel"
+              >
+                Login
+              </TabsTrigger>
+              <TabsTrigger 
+                value="register"
+                role="tab" 
+                aria-selected="false"
+                aria-controls="register-panel"
+              >
+                Register
+              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="login">
+            <TabsContent value="login" id="login-panel" role="tabpanel">
               <Form {...loginForm}>
                 <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
                   <FormField
@@ -123,11 +139,17 @@ export default function Login() {
                     name="username"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Username</FormLabel>
+                        <FormLabel htmlFor="login-username">Username</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter your username" {...field} />
+                          <Input 
+                            id="login-username"
+                            placeholder="Enter your username" 
+                            autoComplete="username"
+                            aria-describedby={loginForm.formState.errors.username ? "login-username-error" : undefined}
+                            {...field} 
+                          />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage id="login-username-error" />
                       </FormItem>
                     )}
                   />
@@ -137,11 +159,34 @@ export default function Login() {
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Password</FormLabel>
+                        <FormLabel htmlFor="login-password">Password</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="Enter your password" {...field} />
+                          <div className="relative">
+                            <Input 
+                              id="login-password"
+                              type={showPassword ? "text" : "password"}
+                              placeholder="Enter your password" 
+                              autoComplete="current-password"
+                              aria-describedby={loginForm.formState.errors.password ? "login-password-error" : undefined}
+                              {...field} 
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                              onClick={() => setShowPassword(!showPassword)}
+                              aria-label={showPassword ? "Hide password" : "Show password"}
+                            >
+                              {showPassword ? (
+                                <EyeOff className="h-4 w-4" aria-hidden="true" />
+                              ) : (
+                                <Eye className="h-4 w-4" aria-hidden="true" />
+                              )}
+                            </Button>
+                          </div>
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage id="login-password-error" />
                       </FormItem>
                     )}
                   />
@@ -150,15 +195,21 @@ export default function Login() {
                     type="submit"
                     className="w-full"
                     disabled={loginMutation.isPending}
+                    aria-describedby={loginMutation.isPending ? "login-loading" : undefined}
                   >
-                    {loginMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Sign In
+                    {loginMutation.isPending && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                    )}
+                    <span>{loginMutation.isPending ? "Signing In..." : "Sign In"}</span>
+                    {loginMutation.isPending && (
+                      <span id="login-loading" className="sr-only">Loading</span>
+                    )}
                   </Button>
                 </form>
               </Form>
             </TabsContent>
 
-            <TabsContent value="register">
+            <TabsContent value="register" id="register-panel" role="tabpanel">
               <Form {...registerForm}>
                 <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
                   <FormField
@@ -166,11 +217,17 @@ export default function Login() {
                     name="username"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Username</FormLabel>
+                        <FormLabel htmlFor="register-username">Username</FormLabel>
                         <FormControl>
-                          <Input placeholder="Choose a username" {...field} />
+                          <Input 
+                            id="register-username"
+                            placeholder="Choose a username" 
+                            autoComplete="username"
+                            aria-describedby={registerForm.formState.errors.username ? "register-username-error" : undefined}
+                            {...field} 
+                          />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage id="register-username-error" />
                       </FormItem>
                     )}
                   />
@@ -180,11 +237,18 @@ export default function Login() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email</FormLabel>
+                        <FormLabel htmlFor="register-email">Email</FormLabel>
                         <FormControl>
-                          <Input type="email" placeholder="Enter your email" {...field} />
+                          <Input 
+                            id="register-email"
+                            type="email" 
+                            placeholder="Enter your email" 
+                            autoComplete="email"
+                            aria-describedby={registerForm.formState.errors.email ? "register-email-error" : undefined}
+                            {...field} 
+                          />
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage id="register-email-error" />
                       </FormItem>
                     )}
                   />
@@ -194,11 +258,34 @@ export default function Login() {
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Password</FormLabel>
+                        <FormLabel htmlFor="register-password">Password</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="Choose a password" {...field} />
+                          <div className="relative">
+                            <Input 
+                              id="register-password"
+                              type={showPassword ? "text" : "password"}
+                              placeholder="Choose a password" 
+                              autoComplete="new-password"
+                              aria-describedby={registerForm.formState.errors.password ? "register-password-error" : undefined}
+                              {...field} 
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                              onClick={() => setShowPassword(!showPassword)}
+                              aria-label={showPassword ? "Hide password" : "Show password"}
+                            >
+                              {showPassword ? (
+                                <EyeOff className="h-4 w-4" aria-hidden="true" />
+                              ) : (
+                                <Eye className="h-4 w-4" aria-hidden="true" />
+                              )}
+                            </Button>
+                          </div>
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage id="register-password-error" />
                       </FormItem>
                     )}
                   />
@@ -208,11 +295,34 @@ export default function Login() {
                     name="confirmPassword"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Confirm Password</FormLabel>
+                        <FormLabel htmlFor="register-confirm-password">Confirm Password</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="Confirm your password" {...field} />
+                          <div className="relative">
+                            <Input 
+                              id="register-confirm-password"
+                              type={showConfirmPassword ? "text" : "password"}
+                              placeholder="Confirm your password" 
+                              autoComplete="new-password"
+                              aria-describedby={registerForm.formState.errors.confirmPassword ? "register-confirm-password-error" : undefined}
+                              {...field} 
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                              aria-label={showConfirmPassword ? "Hide password confirmation" : "Show password confirmation"}
+                            >
+                              {showConfirmPassword ? (
+                                <EyeOff className="h-4 w-4" aria-hidden="true" />
+                              ) : (
+                                <Eye className="h-4 w-4" aria-hidden="true" />
+                              )}
+                            </Button>
+                          </div>
                         </FormControl>
-                        <FormMessage />
+                        <FormMessage id="register-confirm-password-error" />
                       </FormItem>
                     )}
                   />
@@ -221,9 +331,15 @@ export default function Login() {
                     type="submit"
                     className="w-full"
                     disabled={registerMutation.isPending}
+                    aria-describedby={registerMutation.isPending ? "register-loading" : undefined}
                   >
-                    {registerMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Create Account
+                    {registerMutation.isPending && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                    )}
+                    <span>{registerMutation.isPending ? "Creating Account..." : "Create Account"}</span>
+                    {registerMutation.isPending && (
+                      <span id="register-loading" className="sr-only">Loading</span>
+                    )}
                   </Button>
                 </form>
               </Form>
