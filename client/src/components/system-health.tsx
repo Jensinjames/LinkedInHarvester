@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import { NetworkError } from "@/components/ui/network-error";
 import { Wifi, WifiOff, CheckCircle, AlertCircle, Clock, Database } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -30,12 +32,40 @@ export default function SystemHealth() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
-            <Database className="h-5 w-5 animate-pulse text-blue-500" />
+            <Database className="h-5 w-5 text-gray-400" />
             <span>System Health</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-text-light">Checking system status...</p>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center space-x-2">
+              <Skeleton className="h-5 w-5 rounded" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Skeleton className="h-5 w-5 rounded" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <div className="flex items-center space-x-2">
+              <Skeleton className="h-2 w-full rounded-full" />
+              <Skeleton className="h-4 w-12" />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Skeleton className="h-4 w-20 mb-1" />
+              <Skeleton className="h-5 w-16" />
+            </div>
+            <div>
+              <Skeleton className="h-4 w-24 mb-1" />
+              <Skeleton className="h-5 w-20" />
+            </div>
+          </div>
         </CardContent>
       </Card>
     );
@@ -51,12 +81,7 @@ export default function SystemHealth() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Cannot connect to system health monitoring
-            </AlertDescription>
-          </Alert>
+          <NetworkError error={error} onRetry={() => window.location.reload()} />
         </CardContent>
       </Card>
     );

@@ -1,6 +1,8 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { NetworkError } from "@/components/ui/network-error";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { toast } from "@/hooks/use-toast";
 import { Download, AlertCircle, FileText, Linkedin, Wifi } from "lucide-react";
@@ -28,15 +30,15 @@ interface ExportCounts {
 }
 
 export default function SidebarControls() {
-  const { data: authStatus } = useQuery<AuthStatus>({
+  const { data: authStatus, isLoading: authLoading, error: authError } = useQuery<AuthStatus>({
     queryKey: ["/api/auth/status-detailed"],
   });
 
-  const { data: errorBreakdown } = useQuery<ErrorBreakdown>({
+  const { data: errorBreakdown, isLoading: errorLoading, error: errorError } = useQuery<ErrorBreakdown>({
     queryKey: ["/api/stats/errors"],
   });
 
-  const { data: exportCounts } = useQuery<ExportCounts>({
+  const { data: exportCounts, isLoading: exportLoading, error: exportError } = useQuery<ExportCounts>({
     queryKey: ["/api/stats/export-counts"],
   });
 
@@ -84,6 +86,24 @@ export default function SidebarControls() {
     },
   });
 
+  const isLoading = authLoading || errorLoading || exportLoading;
+
+  if (authError || errorError || exportError) {
+    return (
+      <Card className="bg-white shadow-sm border border-gray-200">
+        <CardHeader className="p-6">
+          <h3 className="text-lg font-semibold text-text-dark">Controls</h3>
+        </CardHeader>
+        <CardContent className="p-6 pt-0">
+          <NetworkError 
+            error={authError || errorError || exportError} 
+            onRetry={() => window.location.reload()} 
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Authentication Status */}
@@ -92,25 +112,47 @@ export default function SidebarControls() {
           <h3 className="text-lg font-semibold text-text-dark">Authentication</h3>
         </CardHeader>
         <CardContent className="p-6 pt-0">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${
-                  authStatus?.linkedinConnected ? 'bg-success-green' : 'bg-error-red'
-                }`}></div>
-                <span className="text-sm font-medium">LinkedIn API</span>
+          {authLoading ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Skeleton className="w-3 h-3 rounded-full" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+                <Skeleton className="h-4 w-16" />
               </div>
-              {!authStatus?.linkedinConnected && (
-                <Button
-                  variant="link"
-                  size="sm"
-                  onClick={() => reconnectLinkedInMutation.mutate()}
-                  className="text-azure-blue hover:text-azure-dark p-0 h-auto"
-                >
-                  Connect
-                </Button>
-              )}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Skeleton className="w-3 h-3 rounded-full" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+                <Skeleton className="h-4 w-12" />
+              </div>
+              <div className="pt-2 border-t border-gray-200">
+                <Skeleton className="h-3 w-32 mb-2" />
+                <Skeleton className="h-3 w-28" />
+              </div>
             </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <div className={`w-3 h-3 rounded-full ${
+                    authStatus?.linkedinConnected ? 'bg-success-green' : 'bg-error-red'
+                  }`}></div>
+                  <span className="text-sm font-medium">LinkedIn API</span>
+                </div>
+                {!authStatus?.linkedinConnected && (
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => reconnectLinkedInMutation.mutate()}
+                    className="text-azure-blue hover:text-azure-dark p-0 h-auto"
+                  >
+                    Connect
+                  </Button>
+                )}
+              </div>
             
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
@@ -141,6 +183,7 @@ export default function SidebarControls() {
               </div>
             )}
           </div>
+          )}
         </CardContent>
       </Card>
 
@@ -150,7 +193,14 @@ export default function SidebarControls() {
           <h3 className="text-lg font-semibold text-text-dark">Export Results</h3>
         </CardHeader>
         <CardContent className="p-6 pt-0">
-          <div className="space-y-3">
+          {exportLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : (
+            <div className="space-y-3">
             <Button
               onClick={() => exportMutation.mutate('successful')}
               disabled={exportMutation.isPending}
@@ -180,6 +230,7 @@ export default function SidebarControls() {
               Export All Results
             </Button>
           </div>
+          )}
         </CardContent>
       </Card>
 

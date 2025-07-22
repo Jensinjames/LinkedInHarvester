@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import { NetworkError } from "@/components/ui/network-error";
 import { Pause, Play, Square, Clock, Activity, AlertCircle } from "lucide-react";
 
 export default function ProcessingProgress() {
@@ -29,12 +31,7 @@ export default function ProcessingProgress() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Failed to load job status. Please refresh the page.
-            </AlertDescription>
-          </Alert>
+          <NetworkError error={error} onRetry={() => window.location.reload()} />
         </CardContent>
       </Card>
     );
@@ -45,12 +42,38 @@ export default function ProcessingProgress() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
-            <Activity className="h-5 w-5 text-text-light animate-spin" />
+            <Activity className="h-5 w-5 text-gray-400" />
             <span>Processing Progress</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-text-light">Loading job status...</p>
+        <CardContent className="space-y-4">
+          <div>
+            <div className="flex justify-between mb-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+            <Skeleton className="h-2 w-full rounded-full" />
+          </div>
+          
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <Skeleton className="h-4 w-20 mb-1" />
+              <Skeleton className="h-6 w-24" />
+            </div>
+            <div>
+              <Skeleton className="h-4 w-20 mb-1" />
+              <Skeleton className="h-6 w-24" />
+            </div>
+            <div>
+              <Skeleton className="h-4 w-20 mb-1" />
+              <Skeleton className="h-6 w-24" />
+            </div>
+          </div>
+          
+          <div className="flex space-x-2">
+            <Skeleton className="h-9 w-24" />
+            <Skeleton className="h-9 w-24" />
+          </div>
         </CardContent>
       </Card>
     );

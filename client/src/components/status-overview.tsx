@@ -1,5 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { NetworkError } from "@/components/ui/network-error";
 import { Users, CheckCircle, AlertTriangle, TrendingUp } from "lucide-react";
 
 interface StatsData {
@@ -10,7 +12,7 @@ interface StatsData {
 }
 
 export default function StatusOverview() {
-  const { data: stats, isLoading } = useQuery<StatsData>({
+  const { data: stats, isLoading, error, refetch } = useQuery<StatsData>({
     queryKey: ["/api/stats/overview"],
   });
 
@@ -18,14 +20,23 @@ export default function StatusOverview() {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {[...Array(4)].map((_, i) => (
-          <Card key={i} className="animate-pulse">
+          <Card key={i} className="bg-white shadow-sm border border-gray-200">
             <CardContent className="p-6">
-              <div className="h-16 bg-gray-200 rounded"></div>
+              <div className="flex items-center justify-between mb-4">
+                <Skeleton className="h-10 w-10 rounded-lg" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+              <Skeleton className="h-8 w-20 mb-2" />
+              <Skeleton className="h-4 w-32" />
             </CardContent>
           </Card>
         ))}
       </div>
     );
+  }
+
+  if (error) {
+    return <NetworkError error={error} onRetry={() => refetch()} className="mb-8" />;
   }
 
   const statsCards = [

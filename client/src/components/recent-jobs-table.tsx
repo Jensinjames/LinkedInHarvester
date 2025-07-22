@@ -2,6 +2,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import { NetworkError } from "@/components/ui/network-error";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { FileSpreadsheet, Pause, Square, Download, Trash2 } from "lucide-react";
 import {
@@ -27,7 +29,7 @@ interface JobData {
 }
 
 export default function RecentJobsTable() {
-  const { data: jobs = [], isLoading } = useQuery<JobData[]>({
+  const { data: jobs = [], isLoading, error, refetch } = useQuery<JobData[]>({
     queryKey: ["/api/jobs/recent"],
     refetchInterval: 10000, // Poll every 10 seconds
   });
@@ -114,12 +116,89 @@ export default function RecentJobsTable() {
   if (isLoading) {
     return (
       <Card className="mt-8 bg-white shadow-sm border border-gray-200">
-        <CardContent className="p-6">
-          <div className="animate-pulse space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-200 rounded"></div>
-            ))}
+        <CardHeader className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-text-dark">
+              Recent Processing Jobs
+            </h2>
+            <Skeleton className="h-4 w-16" />
           </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-gray uppercase tracking-wider">
+                    File Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-gray uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-gray uppercase tracking-wider">
+                    Progress
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-gray uppercase tracking-wider">
+                    Time
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-gray uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {[...Array(5)].map((_, i) => (
+                  <tr key={i}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <Skeleton className="h-8 w-8 rounded mr-3" />
+                        <div>
+                          <Skeleton className="h-4 w-32 mb-1" />
+                          <Skeleton className="h-3 w-24" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <Skeleton className="h-3 w-16 mb-2" />
+                        <Skeleton className="h-2 w-full rounded-full" />
+                        <Skeleton className="h-3 w-12 mt-1" />
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <Skeleton className="h-4 w-20" />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        <Skeleton className="h-8 w-8 rounded" />
+                        <Skeleton className="h-8 w-8 rounded" />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="mt-8 bg-white shadow-sm border border-gray-200">
+        <CardHeader className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-text-dark">
+              Recent Processing Jobs
+            </h2>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6">
+          <NetworkError error={error} onRetry={() => refetch()} />
         </CardContent>
       </Card>
     );

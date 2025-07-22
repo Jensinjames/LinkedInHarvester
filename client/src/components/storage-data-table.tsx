@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { NetworkError } from "@/components/ui/network-error";
 import { apiRequest } from "@/lib/queryClient";
 import { type Job, type Profile } from "@shared/schema";
 import { 
@@ -122,7 +124,16 @@ export default function StorageDataTable() {
         </div>
         
         {/* Storage Statistics */}
-        {storageStats && (
+        {!storageStats ? (
+          <div className="grid grid-cols-5 gap-4 mt-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="text-center">
+                <Skeleton className="h-8 w-16 mx-auto mb-1" />
+                <Skeleton className="h-3 w-20 mx-auto" />
+              </div>
+            ))}
+          </div>
+        ) : (
           <div className="grid grid-cols-5 gap-4 mt-4">
             <div className="text-center">
               <p className="text-2xl font-bold text-text-dark">{storageStats.totalJobs}</p>
@@ -185,11 +196,31 @@ export default function StorageDataTable() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {jobsLoading ? (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-8 text-center text-neutral-gray">
-                        Loading jobs...
-                      </td>
-                    </tr>
+                    [...Array(5)].map((_, i) => (
+                      <tr key={i}>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-8" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-48" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-6 w-20 rounded-full" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div>
+                            <Skeleton className="h-2 w-full rounded-full mb-1" />
+                            <Skeleton className="h-3 w-16" />
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-4 w-32" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Skeleton className="h-8 w-20 rounded" />
+                        </td>
+                      </tr>
+                    ))
                   ) : jobsData?.jobs.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-4 py-8 text-center text-neutral-gray">
