@@ -126,7 +126,11 @@ export const globalRateLimit = rateLimit({
   skip: () => process.env.NODE_ENV !== 'production',
   keyGenerator: (req: Request) => {
     // Use user ID for authenticated requests, IP for anonymous
-    return req.user ? `user:${req.user.userId}` : req.ip;
+    if (req.user) {
+      return `user:${req.user.userId}`;
+    }
+    // Use proper IPv6-safe IP handling
+    return req.ip || req.connection.remoteAddress || 'anonymous';
   },
 });
 
