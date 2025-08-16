@@ -87,7 +87,7 @@ export default function NavigationHeader() {
 
   const isLinkedInConnected = authStatus?.user?.linkedinConnected;
 
-  const NavigationLinks = ({ mobile = false, onNavigate?: () => void }) => (
+  const NavigationLinks = ({ mobile = false, onNavigate }: { mobile?: boolean, onNavigate?: () => void }) => (
     <nav 
       className={mobile ? "flex flex-col space-y-2" : "hidden sm:flex sm:space-x-1"}
       role="navigation"
@@ -146,7 +146,7 @@ export default function NavigationHeader() {
     </div>
   );
 
-  const UserMenu = ({ mobile = false, onNavigate?: () => void }) => {
+  const UserMenu = ({ mobile = false, onNavigate }: { mobile?: boolean, onNavigate?: () => void }) => {
     if (!user) return null;
 
     if (mobile) {
